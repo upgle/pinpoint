@@ -21,6 +21,7 @@ import com.google.inject.Provider;
 import com.navercorp.pinpoint.bootstrap.config.ProfilerConfig;
 import com.navercorp.pinpoint.profiler.AgentInformation;
 import com.navercorp.pinpoint.profiler.receiver.CommandDispatcher;
+import com.navercorp.pinpoint.rpc.client.ConnectionFactoryProvider;
 import com.navercorp.pinpoint.rpc.client.DefaultPinpointClientFactory;
 import com.navercorp.pinpoint.rpc.client.PinpointClientFactory;
 import com.navercorp.pinpoint.rpc.packet.HandshakePropertyType;
@@ -35,10 +36,11 @@ public class PinpointClientFactoryProvider implements Provider<PinpointClientFac
 
     private final ProfilerConfig profilerConfig;
     private final Provider<AgentInformation> agentInformation;
+    private final Provider<ConnectionFactoryProvider> connectionFactoryProvider;
     private final CommandDispatcher commandDispatcher;
 
     @Inject
-    public PinpointClientFactoryProvider(ProfilerConfig profilerConfig, Provider<AgentInformation> agentInformation, CommandDispatcher commandDispatcher) {
+    public PinpointClientFactoryProvider(ProfilerConfig profilerConfig, Provider<AgentInformation> agentInformation, CommandDispatcher commandDispatcher, Provider<ConnectionFactoryProvider> connectionFactoryProvider) {
         if (profilerConfig == null) {
             throw new NullPointerException("profilerConfig must not be null");
         }
@@ -48,14 +50,22 @@ public class PinpointClientFactoryProvider implements Provider<PinpointClientFac
         if (commandDispatcher == null) {
             throw new NullPointerException("commandDispatcher must not be null");
         }
+        if (connectionFactoryProvider == null) {
+            throw new NullPointerException("connectionFactoryProvider must not be null");
+        }
         this.profilerConfig = profilerConfig;
         this.agentInformation = agentInformation;
         this.commandDispatcher = commandDispatcher;
+        this.connectionFactoryProvider = connectionFactoryProvider;
     }
 
     public PinpointClientFactory get() {
-        PinpointClientFactory pinpointClientFactory = new DefaultPinpointClientFactory();
-        pinpointClientFactory.setTimeoutMillis(1000 * 5);
+        PinpointClientFactory pinpointClientFactory = new DefaultPinpointClientFactory(connectionFactoryProvider.get());
+        pinpointClientFactory.setWriteTimeoutMillis(profilerConfig.getTcpDataSenderPinpointClientWriteTimeout());
+        pinpointClientFactory.setRequestTimeoutMillis(profilerConfig.getTcpDataSenderPinpointClientRequestTimeout());
+        pinpointClientFactory.setReconnectDelay(profilerConfig.getTcpDataSenderPinpointClientReconnectInterval());
+        pinpointClientFactory.setPingDelay(profilerConfig.getTcpDataSenderPinpointClientPingInterval());
+        pinpointClientFactory.setEnableWorkerPacketDelay(profilerConfig.getTcpDataSenderPinpointClientHandshakeInterval());
 
         AgentInformation agentInformation = this.agentInformation.get();
         Map<String, Object> properties = toMap(agentInformation);

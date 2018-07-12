@@ -19,7 +19,6 @@ package com.navercorp.pinpoint.collector.receiver.udp;
 import org.apache.thrift.TBase;
 
 import java.net.DatagramSocket;
-import java.net.SocketAddress;
 import java.util.List;
 
 /**
@@ -36,7 +35,7 @@ public class TBaseFilterChain<T> implements TBaseFilter<T> {
         }
 
         @SuppressWarnings("unchecked")
-        final TBaseFilter<T>[] newArray = (TBaseFilter<T>[]) new TBaseFilter[tBaseFilter.size()];
+        final TBaseFilter<T>[] newArray = (TBaseFilter<T>[]) new TBaseFilter[0];
         this.filterChain = tBaseFilter.toArray(newArray);
     }
 

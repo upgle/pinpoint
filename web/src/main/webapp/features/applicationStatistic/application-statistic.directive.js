@@ -40,14 +40,9 @@
 					}
 
 					function initTooltip() {
-						TooltipService.init( "statHeap" );
-						TooltipService.init( "statPermGen" );
-						TooltipService.init( "statJVMCpu" );
-						TooltipService.init( "statSystemCpu" );
-						TooltipService.init( "statTPS" );
-						TooltipService.init( "statActiveThread" );
-						TooltipService.init( "statResponseTime" );
-						TooltipService.init( "statDataSource" );
+						[ "statHeap", "statPermGen", "statJVMCpu", "statSystemCpu", "statTPS", "statActiveThread", "statResponseTime", "statDataSource", "statOpenFileDescriptor", "statDirectBufferCount", "statDirectBufferMemory", "statMappedBufferCount", "statMappedBufferMemory" ].forEach(function( name ) {
+							TooltipService.init( name );
+						});
 					}
 					function loadStatChart(from, to) {
 						var oParam = {
@@ -156,6 +151,63 @@
 									scope.dataSourceData = chartData;
 									bEmptyDataSource = false;
 									broadcastToDataSource(chartData[scope.dataSourceSelectedIndex].charts.x, chartData[scope.dataSourceSelectedIndex].charts.y["ACTIVE_CONNECTION_SIZE"]);
+								} else {
+									console.log("error");
+								}
+							});
+							AgentAjaxService.getStatOpenFileDescriptor( oParam, function(chartData) {
+								if ( angular.isUndefined(chartData.exception) ) {
+									scope.$broadcast("statisticChartDirective.initAndRenderWithData.application-open-file-descriptor", makeChartData({
+										title: "Open File Descriptor",
+										fixMax: false,
+										defaultMax: 100,
+										yAxisTitle: "File Descriptor(count)",
+										labelFunc: function(value) {
+											return value;
+										}
+									}, chartData.charts.x, chartData.charts.y["OPEN_FILE_DESCRIPTOR_COUNT"]), "100%", "270px");
+								} else {
+									console.log("error");
+								}
+							});
+							AgentAjaxService.getStatDirectBuffer( oParam, function(chartData) {
+								if ( angular.isUndefined(chartData.exception) ) {
+									scope.$broadcast("statisticChartDirective.initAndRenderWithData.application-direct-buffer-count", makeChartData({
+										title: "Direct Buffer Count",
+										fixMax: false,
+										defaultMax: 100,
+										yAxisTitle: "Buffer (count)",
+										labelFunc: function(value) {
+											return value;
+										}
+									}, chartData.charts.x, chartData.charts.y["DIRECT_COUNT"]), "100%", "270px");
+									scope.$broadcast("statisticChartDirective.initAndRenderWithData.application-mapped-buffer-count", makeChartData({
+										title: "Mapped Buffer Count",
+										fixMax: false,
+										defaultMax: 100,
+										yAxisTitle: "Buffer (count)",
+										labelFunc: function(value) {
+											return value;
+										}
+									}, chartData.charts.x, chartData.charts.y["MAPPED_COUNT"]), "100%", "270px");
+									scope.$broadcast("statisticChartDirective.initAndRenderWithData.application-direct-buffer-memory", makeChartData({
+										title: "Direct Buffer memory",
+										fixMax: false,
+										defaultMax: 100,
+										yAxisTitle: "Memory (bytes)",
+										labelFunc: function(value) {
+											return convertWithUnits(value, ["", "K", "M", "G"]);
+										}
+									}, chartData.charts.x, chartData.charts.y["DIRECT_MEMORY_USED"]), "100%", "270px");
+									scope.$broadcast("statisticChartDirective.initAndRenderWithData.application-mapped-buffer-memory", makeChartData({
+										title: "Mapped Buffer Memory",
+										fixMax: false,
+										defaultMax: 100,
+										yAxisTitle: "Memory (bytes)",
+										labelFunc: function(value) {
+											return convertWithUnits(value, ["", "K", "M", "G"]);
+										}
+									}, chartData.charts.x, chartData.charts.y["MAPPED_MEMORY_USED"]), "100%", "270px");
 								} else {
 									console.log("error");
 								}

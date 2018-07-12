@@ -62,6 +62,8 @@ public class DefaultPinpointClientFactory implements PinpointClientFactory {
 
     private final Timer timer;
 
+    private final ConnectionFactoryProvider connectionFactoryProvider;
+
     private final ClientOption.Builder clientOptionBuilder = new ClientOption.Builder();
 
     private ClusterOption clusterOption = ClusterOption.DISABLE_CLUSTER_OPTION;
@@ -79,7 +81,15 @@ public class DefaultPinpointClientFactory implements PinpointClientFactory {
         this(1, 1);
     }
 
+    public DefaultPinpointClientFactory(ConnectionFactoryProvider connectionFactoryProvider) {
+        this(1, 1, connectionFactoryProvider);
+    }
+
     public DefaultPinpointClientFactory(int bossCount, int workerCount) {
+        this(bossCount, workerCount, new DefaultConnectionFactoryProvider(new ClientCodecPipelineFactory()));
+    }
+
+    public DefaultPinpointClientFactory(int bossCount, int workerCount, ConnectionFactoryProvider connectionFactoryProvider) {
         if (bossCount < 1) {
             throw new IllegalArgumentException("bossCount is negative: " + bossCount);
         }
@@ -90,7 +100,7 @@ public class DefaultPinpointClientFactory implements PinpointClientFactory {
         logger.debug("createBootStrap boss:{}, worker:{}", bossCount, workerCount);
         this.channelFactory = channelFactory.createChannelFactory(bossCount, workerCount, timer);
         this.socketOptionBuilder = new SocketOption.Builder();
-
+        this.connectionFactoryProvider = Assert.requireNonNull(connectionFactoryProvider, "connectionFactoryProvider must not be null");
     }
 
     private static Timer createTimer(String timerName) {
@@ -131,14 +141,25 @@ public class DefaultPinpointClientFactory implements PinpointClientFactory {
         this.clientOptionBuilder.setEnableWorkerPacketDelay(enableWorkerPacketDelay);
     }
 
-    public long getTimeoutMillis() {
-        return this.clientOptionBuilder.getTimeoutMillis();
+    @Override
+    public long getWriteTimeoutMillis() {
+        return this.clientOptionBuilder.getWriteTimeoutMillis();
     }
 
-    public void setTimeoutMillis(long timeoutMillis) {
-        this.clientOptionBuilder.setTimeoutMillis(timeoutMillis);
+    @Override
+    public void setWriteTimeoutMillis(long writeTimeoutMillis) {
+        this.clientOptionBuilder.setWriteTimeoutMillis(writeTimeoutMillis);
     }
 
+    @Override
+    public long getRequestTimeoutMillis() {
+        return this.clientOptionBuilder.getRequestTimeoutMillis();
+    }
+
+    @Override
+    public void setRequestTimeoutMillis(long requestTimeoutMillis) {
+        this.clientOptionBuilder.setRequestTimeoutMillis(requestTimeoutMillis);
+    }
 
     public PinpointClient connect(String host, int port) throws PinpointSocketException {
         SocketAddressProvider socketAddressProvider = new DnsSocketAddressProvider(host, port);
@@ -177,7 +198,7 @@ public class DefaultPinpointClientFactory implements PinpointClientFactory {
 
         final SocketOption socketOption = this.socketOptionBuilder.build();
 
-        return new ConnectionFactory(timer, this.closed, this.channelFactory, socketOption, clientOption, clientHandlerFactory);
+        return connectionFactoryProvider.get(timer, this.closed, this.channelFactory, socketOption, clientOption, clientHandlerFactory);
     }
 
     @Override

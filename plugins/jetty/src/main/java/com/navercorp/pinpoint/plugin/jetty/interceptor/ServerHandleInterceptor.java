@@ -15,42 +15,45 @@
  */
 package com.navercorp.pinpoint.plugin.jetty.interceptor;
 
-import com.navercorp.pinpoint.bootstrap.config.Filter;
 import com.navercorp.pinpoint.bootstrap.context.MethodDescriptor;
+import com.navercorp.pinpoint.bootstrap.context.Trace;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
-import org.eclipse.jetty.server.HttpChannel;
-import org.eclipse.jetty.server.Request;
+import com.navercorp.pinpoint.bootstrap.interceptor.AroundInterceptor;
+import com.navercorp.pinpoint.bootstrap.logging.PLogger;
+import com.navercorp.pinpoint.bootstrap.logging.PLoggerFactory;
 
 /**
  * @author Taejin Koo
  * @author jaehong.kim
- *
- * jetty-9.x
  */
-public class ServerHandleInterceptor extends AbstractServerHandleInterceptor {
+public class ServerHandleInterceptor implements AroundInterceptor {
+    private final PLogger logger = PLoggerFactory.getLogger(this.getClass());
+    private final boolean isDebug = logger.isDebugEnabled();
 
-    public ServerHandleInterceptor(TraceContext traceContext, MethodDescriptor descriptor, Filter<String> excludeFilter) {
-        super(traceContext, descriptor, excludeFilter);
+    private MethodDescriptor methodDescriptor;
+    private TraceContext traceContext;
+
+    public ServerHandleInterceptor(TraceContext traceContext, MethodDescriptor methodDescriptor) {
+        this.traceContext = traceContext;
+        this.methodDescriptor = methodDescriptor;
     }
 
     @Override
-    protected Request getRequest(final Object[] args) {
-        if (args == null || args.length < 1) {
-            return null;
-        }
-
-        if (args[0] instanceof HttpChannel) {
-            final HttpChannel<?> channel = (HttpChannel<?>) args[0];
-            return channel.getRequest();
-        }
-        return null;
+    public void before(Object target, Object[] args) {
     }
 
     @Override
-    String getHeader(final Request request, final String name) {
-        if (request == null || request.getHttpFields() == null) {
-            return null;
+    public void after(Object target, Object[] args, Object result, Throwable throwable) {
+        if (isDebug) {
+            logger.afterInterceptor(target, args, result, throwable);
         }
-        return request.getHttpFields().get(name);
+
+        final Trace trace = this.traceContext.currentRawTraceObject();
+        if (trace == null) {
+            return;
+        }
+        // Only remove bind trace
+        // Defense code(important)
+        this.traceContext.removeTraceObject();
     }
 }

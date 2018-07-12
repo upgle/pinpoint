@@ -16,6 +16,7 @@
 package com.navercorp.pinpoint.profiler.instrument;
 
 import com.navercorp.pinpoint.bootstrap.instrument.InstrumentContext;
+import com.navercorp.pinpoint.common.util.CollectionUtils;
 import com.navercorp.pinpoint.profiler.util.JavaAssistUtils;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -124,7 +125,7 @@ public class ASMClassNodeAdapter {
 
     public String[] getInterfaceNames() {
         final List<String> interfaces = this.classNode.interfaces;
-        if (interfaces == null || interfaces.size() == 0) {
+        if (CollectionUtils.isEmpty(interfaces)) {
             return new String[0];
         }
 
@@ -135,7 +136,7 @@ public class ASMClassNodeAdapter {
             }
         }
 
-        return list.toArray(new String[list.size()]);
+        return list.toArray(new String[0]);
     }
 
     public ASMMethodNodeAdapter getDeclaredMethod(final String methodName, final String desc) {
@@ -288,7 +289,7 @@ public class ASMClassNodeAdapter {
 
         String[] exceptions = null;
         if (superMethodNode.getExceptions() != null) {
-            exceptions = superMethodNode.getExceptions().toArray(new String[superMethodNode.getExceptions().size()]);
+            exceptions = superMethodNode.getExceptions().toArray(new String[0]);
         }
 
         final ASMMethodNodeAdapter methodNode = new ASMMethodNodeAdapter(getInternalName(), new MethodNode(superMethodNode.getAccess(), superMethodNode.getName(), superMethodNode.getDesc(), superMethodNode.getSignature(), exceptions));
@@ -440,7 +441,7 @@ public class ASMClassNodeAdapter {
 
     public List<ASMClassNodeAdapter> getInnerClasses() {
         if (this.classNode.innerClasses == null) {
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
 
         final List<ASMClassNodeAdapter> innerClasses = new ArrayList<ASMClassNodeAdapter>();
@@ -457,6 +458,11 @@ public class ASMClassNodeAdapter {
         }
 
         return innerClasses;
+    }
+
+    public int getMajorVersion() {
+        final int majorVersion =  this.classNode.version & 0xFFFF;
+        return majorVersion;
     }
 
     public byte[] toByteArray() {

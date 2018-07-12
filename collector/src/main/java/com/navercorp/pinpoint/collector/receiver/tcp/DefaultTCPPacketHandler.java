@@ -18,6 +18,10 @@ package com.navercorp.pinpoint.collector.receiver.tcp;
 
 import com.navercorp.pinpoint.collector.receiver.DispatchHandler;
 import com.navercorp.pinpoint.collector.util.PacketUtils;
+import com.navercorp.pinpoint.io.request.DefaultServerRequest;
+import com.navercorp.pinpoint.io.request.Message;
+import com.navercorp.pinpoint.io.request.ServerRequest;
+import com.navercorp.pinpoint.io.request.ServerResponse;
 import com.navercorp.pinpoint.rpc.PinpointSocket;
 import com.navercorp.pinpoint.rpc.packet.BasicPacket;
 import com.navercorp.pinpoint.rpc.packet.RequestPacket;
@@ -32,6 +36,7 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Objects;
 
@@ -61,16 +66,23 @@ public class DefaultTCPPacketHandler implements TCPPacketHandler {
         Objects.requireNonNull(pinpointSocket, "pinpointSocket must not be null");
 
         final byte[] payload = getPayload(packet);
-        SocketAddress remoteAddress = pinpointSocket.getRemoteAddress();
+        final InetSocketAddress remoteAddress = (InetSocketAddress) pinpointSocket.getRemoteAddress();
         try {
-            TBase<?, ?> tBase = SerializationUtils.deserialize(payload, deserializerFactory);
-            dispatchHandler.dispatchSendMessage(tBase);
+            Message<TBase<?, ?>> message = SerializationUtils.deserialize(payload, deserializerFactory);
+            ServerRequest<TBase<?, ?>> serverRequest = newServerRequest(message, remoteAddress);
+            dispatchHandler.dispatchSendMessage(serverRequest);
         } catch (TException e) {
             handleTException(payload, remoteAddress, e);
         } catch (Exception e) {
             // there are cases where invalid headers are received
             handleException(payload, remoteAddress, e);
         }
+    }
+
+    private ServerRequest<TBase<?, ?>> newServerRequest(Message<TBase<?, ?>> message, InetSocketAddress remoteSocketAddress) {
+        final String remoteAddress = remoteSocketAddress.getAddress().getHostAddress();
+        final int remotePort = remoteSocketAddress.getPort();
+        return new DefaultServerRequest<TBase<?, ?>>(message, remoteAddress, remotePort);
     }
 
     public byte[] getPayload(BasicPacket packet) {
@@ -85,15 +97,13 @@ public class DefaultTCPPacketHandler implements TCPPacketHandler {
         Objects.requireNonNull(pinpointSocket, "pinpointSocket must not be null");
 
         final byte[] payload = getPayload(packet);
+        final InetSocketAddress remoteAddress = (InetSocketAddress) pinpointSocket.getRemoteAddress();
 
-        SocketAddress remoteAddress = pinpointSocket.getRemoteAddress();
         try {
-            TBase<?, ?> tBase = SerializationUtils.deserialize(payload, deserializerFactory);
-            TBase result = dispatchHandler.dispatchRequestMessage(tBase);
-            if (result != null) {
-                byte[] resultBytes = SerializationUtils.serialize(result, serializerFactory);
-                pinpointSocket.response(packet, resultBytes);
-            }
+            Message<TBase<?, ?>> message = SerializationUtils.deserialize(payload, deserializerFactory);
+            ServerRequest<TBase<?, ?>> request = newServerRequest(message, remoteAddress);
+            ServerResponse<TBase<?, ?>> response = new TCPServerResponse(serializerFactory, pinpointSocket, packet.getRequestId());
+            dispatchHandler.dispatchRequestMessage(request, response);
         } catch (TException e) {
             handleTException(payload, remoteAddress, e);
         } catch (Exception e) {
@@ -103,11 +113,12 @@ public class DefaultTCPPacketHandler implements TCPPacketHandler {
 
     private void handleTException(byte[] payload, SocketAddress remoteAddress, TException e) {
         if (logger.isWarnEnabled()) {
-            logger.warn("packet serialize error. remote:{} cause:{}", remoteAddress, e.getMessage(), e);
+            logger.warn("packet deserialize error. remote:{} cause:{}", remoteAddress, e.getMessage(), e);
         }
         if (isDebug) {
             logger.debug("packet dump hex:{}", PacketUtils.dumpByteArray(payload));
         }
+        throw new RuntimeException("serialized fail ", e);
     }
 
     private void handleException(byte[] payload, SocketAddress remoteAddress, Exception e) {

@@ -1,11 +1,11 @@
 /*
- * Copyright 2017 NAVER Corp.
+ * Copyright 2018 NAVER Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,8 @@ import com.navercorp.pinpoint.bootstrap.context.Header;
 import com.navercorp.pinpoint.bootstrap.context.SpanRecorder;
 import com.navercorp.pinpoint.bootstrap.logging.PLogger;
 import com.navercorp.pinpoint.bootstrap.logging.PLoggerFactory;
+import com.navercorp.pinpoint.bootstrap.plugin.RequestWrapper;
+import com.navercorp.pinpoint.common.util.StringUtils;
 
 /**
  * @author jaehong.kim
@@ -35,8 +37,8 @@ public class ProxyHttpHeaderRecorder {
         this.enable = enable;
     }
 
-    public void record(final SpanRecorder recorder, final ProxyHttpHeaderHandler handler) {
-        if (recorder == null || handler == null) {
+    public void record(final SpanRecorder recorder, final RequestWrapper requestWrapper) {
+        if (recorder == null || requestWrapper == null) {
             return;
         }
 
@@ -48,9 +50,9 @@ public class ProxyHttpHeaderRecorder {
         }
 
         try {
-            parseAndRecord(recorder, handler, Header.HTTP_PROXY_APP.toString(), ProxyHttpHeader.TYPE_APP);
-            parseAndRecord(recorder, handler, Header.HTTP_PROXY_NGINX.toString(), ProxyHttpHeader.TYPE_NGINX);
-            parseAndRecord(recorder, handler, Header.HTTP_PROXY_APACHE.toString(), ProxyHttpHeader.TYPE_APACHE);
+            parseAndRecord(recorder, requestWrapper, Header.HTTP_PROXY_APP.toString(), ProxyHttpHeader.TYPE_APP);
+            parseAndRecord(recorder, requestWrapper, Header.HTTP_PROXY_NGINX.toString(), ProxyHttpHeader.TYPE_NGINX);
+            parseAndRecord(recorder, requestWrapper, Header.HTTP_PROXY_APACHE.toString(), ProxyHttpHeader.TYPE_APACHE);
         } catch (Exception e) {
             // for handler operations.
             if (isInfo) {
@@ -60,9 +62,9 @@ public class ProxyHttpHeaderRecorder {
     }
 
 
-    private void parseAndRecord(final SpanRecorder recorder, final ProxyHttpHeaderHandler handler, final String name, final int type) {
-        final String value = handler.read(name);
-        if (value == null || value.isEmpty()) {
+    private void parseAndRecord(final SpanRecorder recorder, final RequestWrapper requestWrapper, final String name, final int type) {
+        final String value = requestWrapper.getHeader(name);
+        if (StringUtils.isEmpty(value)) {
             return;
         }
 

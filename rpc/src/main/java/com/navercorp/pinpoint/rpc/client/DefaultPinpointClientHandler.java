@@ -58,7 +58,6 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
     private final Timer channelTimer;
 
     private final ConnectionFactory connectionFactory;
-    private SocketAddress connectSocketAddress;
     private volatile PinpointClient pinpointClient;
 
     private final MessageListener messageListener;
@@ -92,7 +91,7 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
         this.socketAddressProvider = Assert.requireNonNull(socketAddressProvider, "socketAddressProvider must not be null");
 
         this.channelTimer = Assert.requireNonNull(channelTimer, "channelTimer must not be null");
-        this.requestManager = new RequestManager(channelTimer, clientOption.getTimeoutMillis());
+        this.requestManager = new RequestManager(channelTimer, clientOption.getRequestTimeoutMillis());
         this.clientOption = Assert.requireNonNull(clientOption, "clientOption must not be null");
 
 
@@ -133,8 +132,6 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
         }
 
         logger.info("{} channelConnected() started. channel:{}", objectUniqName, channel);
-        this.connectSocketAddress = channel.getRemoteAddress();
-        logger.debug("{} connectedSocketAddress:() channel:{}", channel, connectSocketAddress);
 
         SocketStateChangeResult stateChangeResult = state.toConnected();
         if (!stateChangeResult.isChange()) {
@@ -239,7 +236,7 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
     @Override
     public Future sendAsync(byte[] bytes) {
         ChannelFuture channelFuture = send0(bytes);
-        final ChannelWriteCompleteListenableFuture future = new ChannelWriteCompleteListenableFuture(clientOption.getTimeoutMillis());
+        final ChannelWriteCompleteListenableFuture future = new ChannelWriteCompleteListenableFuture(clientOption.getWriteTimeoutMillis());
         channelFuture.addListener(future);
         return future;
     }
@@ -263,12 +260,16 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
 
     @Override
     public SocketAddress getRemoteAddress() {
-        return connectSocketAddress;
+        final Channel channel = this.channel;
+        if (channel == null) {
+            return null;
+        }
+        return channel.getRemoteAddress();
     }
 
     private void await(ChannelFuture channelFuture) {
         try {
-            channelFuture.await(clientOption.getTimeoutMillis(), TimeUnit.MILLISECONDS);
+            channelFuture.await(clientOption.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -314,15 +315,15 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
             throw new NullPointerException("bytes");
         }
 
-        boolean isEnable = state.isEnableCommunication();
+        final boolean isEnable = state.isEnableCommunication();
         if (!isEnable) {
             DefaultFuture<ResponseMessage> closedException = new DefaultFuture<ResponseMessage>();
             closedException.setFailure(new PinpointSocketException("invalid state:" + state.getCurrentStateCode() + " channel:" + channel));
             return closedException;
         }
-
-        RequestPacket request = new RequestPacket(bytes);
-        final ChannelWriteFailListenableFuture<ResponseMessage> messageFuture = this.requestManager.register(request, clientOption.getTimeoutMillis());
+        final int requestId = this.requestManager.nextRequestId();
+        final RequestPacket request = new RequestPacket(requestId, bytes);
+        final ChannelWriteFailListenableFuture<ResponseMessage> messageFuture = this.requestManager.register(request.getRequestId(), clientOption.getRequestTimeoutMillis());
 
         write0(request, messageFuture);
         return messageFuture;
@@ -432,6 +433,11 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
         if (currentStateCode == SocketStateCode.BEING_CONNECT) {
             // removed stackTrace when reconnect. so many logs.
             logger.info("{} exceptionCaught() occurred. state:{}, caused:{}.", objectUniqName, currentStateCode, cause.getMessage());
+        } else if (currentStateCode == SocketStateCode.NONE) {
+            // If an exception occurs in the execute channel open operation. (caused : netty's resource is already shut downed. then connectFuture never can't set value.)
+            // it will rarely happen but it is likely to happen at the end of the process.
+            logger.warn("{} exceptionCaught() occurred. state:{}. Caused:{}", objectUniqName, currentStateCode, cause.getMessage(), cause);
+            connectFuture.setResult(Result.FAIL);
         } else {
             logger.warn("{} exceptionCaught() occurred. state:{}. Caused:{}", objectUniqName, currentStateCode, cause.getMessage(), cause);
         }
@@ -562,15 +568,15 @@ public class DefaultPinpointClientHandler extends SimpleChannelHandler implement
     }
 
     private ChannelFuture write0(Object message) {
-        return write0(message, null);
+        return channel.write(message);
     }
 
     private ChannelFuture write0(Object message, ChannelFutureListener futureListener) {
-        ChannelFuture future = channel.write(message);
-        if (futureListener != null) {
-            future.addListener(futureListener);
+        if (futureListener == null) {
+            throw new NullPointerException("futureListener must not be null");
         }
-
+        ChannelFuture future = channel.write(message);
+        future.addListener(futureListener);
         return future;
     }
 
