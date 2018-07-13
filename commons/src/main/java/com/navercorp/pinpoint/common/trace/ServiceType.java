@@ -66,6 +66,9 @@ import static com.navercorp.pinpoint.common.trace.ServiceTypeProperty.*;
  *
  * <tr><td>1500</td><td>PHP</td></tr>
  * <tr><td>1501</td><td>PHP_METHOD</td></tr>
+ * <tr><td>1620</td><td>OPENWHISK_INTERNAL</td></tr>
+ * <tr><td>1621</td><td>OPENWHISK_CONTROLLER</td></tr>
+ * <tr><td>1622</td><td>OPENWHISK_INVOKER</td></tr>
  *
  * </table>
  * 
@@ -93,6 +96,8 @@ import static com.navercorp.pinpoint.common.trace.ServiceTypeProperty.*;
  * <tr><td>2501</td><td>POSTGRESQL_EXECUTE_QUERY</td></tr>
  * <tr><td>2600</td><td>CASSANDRA</td></tr>
  * <tr><td>2601</td><td>CASSANDRA_EXECUTE_QUERY</td></tr>
+ * <tr><td>2700</td><td>COUCHDB</td></tr>
+ * <tr><td>2701</td><td>COUCHDB_EXECUTE_QUERY</td></tr>
  * </table>
  *
  * <h3>Database Sandbox (2900 ~ 2999)</h3>
@@ -181,6 +186,7 @@ import static com.navercorp.pinpoint.common.trace.ServiceTypeProperty.*;
  * <tr><td>9150</td><td>NETTY</td></tr>
  * <tr><td>9151</td><td>NETTY_INTERNAL</td></tr>
  * <tr><td>9152</td><td>NETTY_HTTP</td></tr>
+ * <tr><td>9622</td><td>OPENWHISK_CLIENT</td></tr>
  * </table>
  * 
  * <h3>RPC Sandbox (9900 ~ 9999)</h3>
