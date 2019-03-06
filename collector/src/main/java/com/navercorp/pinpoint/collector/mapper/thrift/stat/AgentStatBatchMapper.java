@@ -23,7 +23,9 @@ import com.navercorp.pinpoint.common.server.bo.stat.AgentStatDataPoint;
 import com.navercorp.pinpoint.common.server.bo.stat.CpuLoadBo;
 import com.navercorp.pinpoint.common.server.bo.stat.DataSourceBo;
 import com.navercorp.pinpoint.common.server.bo.stat.DataSourceListBo;
-import com.navercorp.pinpoint.common.server.bo.stat.DeadlockBo;
+import com.navercorp.pinpoint.common.server.bo.stat.DeadlockThreadCountBo;
+import com.navercorp.pinpoint.common.server.bo.stat.DirectBufferBo;
+import com.navercorp.pinpoint.common.server.bo.stat.FileDescriptorBo;
 import com.navercorp.pinpoint.common.server.bo.stat.JvmGcBo;
 import com.navercorp.pinpoint.common.server.bo.stat.JvmGcDetailedBo;
 import com.navercorp.pinpoint.common.server.bo.stat.ResponseTimeBo;
@@ -66,7 +68,13 @@ public class AgentStatBatchMapper implements ThriftBoMapper<AgentStatBo, TAgentS
     private ResponseTimeBoMapper responseTimeBoMapper;
 
     @Autowired
-    private DeadlockBoMapper deadlockBoMapper;
+    private DeadlockThreadCountBoMapper deadlockThreadCountBoMapper;
+
+    @Autowired
+    private FileDescriptorBoMapper fileDescriptorBoMapper;
+
+    @Autowired
+    private DirectBufferBoMapper directBufferBoMapper;
 
     @Override
     public AgentStatBo map(TAgentStatBatch tAgentStatBatch) {
@@ -89,7 +97,9 @@ public class AgentStatBatchMapper implements ThriftBoMapper<AgentStatBo, TAgentS
         List<ActiveTraceBo> activeTraceBos = new ArrayList<>(agentStatsSize);
         List<DataSourceListBo> dataSourceListBos = new ArrayList<DataSourceListBo>(agentStatsSize);
         List<ResponseTimeBo> responseTimeBos = new ArrayList<>(agentStatsSize);
-        List<DeadlockBo> deadlockBos = new ArrayList<>(agentStatsSize);
+        List<DeadlockThreadCountBo> deadlockThreadCountBos = new ArrayList<>(agentStatsSize);
+        List<FileDescriptorBo> fileDescriptorBos = new ArrayList<>(agentStatsSize);
+        List<DirectBufferBo> directBufferBos = new ArrayList<>(agentStatsSize);
 
         for (TAgentStat tAgentStat : tAgentStatBatch.getAgentStats()) {
             final long timestamp = tAgentStat.getTimestamp();
@@ -152,9 +162,23 @@ public class AgentStatBatchMapper implements ThriftBoMapper<AgentStatBo, TAgentS
 
             // deadlock
             if (tAgentStat.isSetDeadlock()) {
-                DeadlockBo deadlockBo = this.deadlockBoMapper.map(tAgentStat.getDeadlock());
-                setBaseData(deadlockBo, agentId, startTimestamp, timestamp);
-                deadlockBos.add(deadlockBo);
+                DeadlockThreadCountBo deadlockThreadCountBo = this.deadlockThreadCountBoMapper.map(tAgentStat.getDeadlock());
+                setBaseData(deadlockThreadCountBo, agentId, startTimestamp, timestamp);
+                deadlockThreadCountBos.add(deadlockThreadCountBo);
+            }
+
+            // fileDescriptor
+            if (tAgentStat.isSetFileDescriptor()) {
+                FileDescriptorBo fileDescriptorBo = this.fileDescriptorBoMapper.map(tAgentStat.getFileDescriptor());
+                setBaseData(fileDescriptorBo, agentId, startTimestamp, timestamp);
+                fileDescriptorBos.add(fileDescriptorBo);
+            }
+
+            // directBuffer
+            if (tAgentStat.isSetDirectBuffer()) {
+                DirectBufferBo directBufferBo = this.directBufferBoMapper.map(tAgentStat.getDirectBuffer());
+                setBaseData(directBufferBo, agentId, startTimestamp, timestamp);
+                directBufferBos.add(directBufferBo);
             }
         }
 
@@ -165,7 +189,9 @@ public class AgentStatBatchMapper implements ThriftBoMapper<AgentStatBo, TAgentS
         agentStatBo.setActiveTraceBos(activeTraceBos);
         agentStatBo.setDataSourceListBos(dataSourceListBos);
         agentStatBo.setResponseTimeBos(responseTimeBos);
-        agentStatBo.setDeadlockBos(deadlockBos);
+        agentStatBo.setDeadlockThreadCountBos(deadlockThreadCountBos);
+        agentStatBo.setFileDescriptorBos(fileDescriptorBos);
+        agentStatBo.setDirectBufferBos(directBufferBos);
         return agentStatBo;
     }
 

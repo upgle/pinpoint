@@ -1,11 +1,11 @@
 /*
- * Copyright 2014 NAVER Corp.
+ * Copyright 2018 NAVER Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -205,15 +205,11 @@ public class DefaultPinpointServer implements PinpointServer {
             throw new IllegalStateException("Request fail. Error: Illegal State. pinpointServer:" + toString());
         }
 
-        RequestPacket requestPacket = new RequestPacket(payload);
-        ChannelWriteFailListenableFuture<ResponseMessage> messageFuture = this.requestManager.register(requestPacket);
-        write0(requestPacket, messageFuture);
-        return messageFuture;
-    }
-
-    @Override
-    public void response(RequestPacket requestPacket, byte[] payload) {
-        response(requestPacket.getRequestId(), payload);
+        final int requestId = this.requestManager.nextRequestId();
+        RequestPacket requestPacket = new RequestPacket(requestId, payload);
+        ChannelWriteFailListenableFuture<ResponseMessage> responseFuture = this.requestManager.register(requestPacket.getRequestId());
+        write0(requestPacket, responseFuture);
+        return responseFuture;
     }
 
     @Override
@@ -388,20 +384,24 @@ public class DefaultPinpointServer implements PinpointServer {
         logger.info("{} handleHandshake() started. requestId:{}, data:{}", objectUniqName, requestId, handshakeData);
 
         HandshakeResponseCode responseCode = messageListener.handleHandshake(handshakeData);
-        boolean isFirst = setChannelProperties(handshakeData);
-        if (isFirst) {
-            if (HandshakeResponseCode.DUPLEX_COMMUNICATION == responseCode) {
-                this.remoteClusterOption = getClusterOption(handshakeData);
-                state.toRunDuplex();
-            } else if (HandshakeResponseCode.SIMPLEX_COMMUNICATION == responseCode || HandshakeResponseCode.SUCCESS == responseCode) {
-                state.toRunSimplex();
+        if (responseCode != null) {
+            boolean isFirst = setChannelProperties(handshakeData);
+            if (isFirst) {
+                if (HandshakeResponseCode.DUPLEX_COMMUNICATION == responseCode) {
+                    this.remoteClusterOption = getClusterOption(handshakeData);
+                    state.toRunDuplex();
+                } else if (HandshakeResponseCode.SIMPLEX_COMMUNICATION == responseCode || HandshakeResponseCode.SUCCESS == responseCode) {
+                    state.toRunSimplex();
+                }
             }
-        }
 
-        Map<String, Object> responseData = createHandshakeResponse(responseCode, isFirst);
-        sendHandshakeResponse0(requestId, responseData);
-        
-        logger.info("{} handleHandshake() completed(isFirst:{}). requestId:{}, responseCode:{}", objectUniqName, isFirst, requestId, responseCode);
+            Map<String, Object> responseData = createHandshakeResponse(responseCode, isFirst);
+            sendHandshakeResponse0(requestId, responseData);
+
+            logger.info("{} handleHandshake() completed(isFirst:{}). requestId:{}, responseCode:{}", objectUniqName, isFirst, requestId, responseCode);
+        } else {
+            logger.info("{} to execute handleHandshake() is not ready", objectUniqName);
+        }
     }
 
     private ClusterOption getClusterOption(Map handshakeResponse) {
@@ -498,27 +498,30 @@ public class DefaultPinpointServer implements PinpointServer {
     }
 
     private Map<String, Object> createHandshakeResponse(HandshakeResponseCode responseCode, boolean isFirst) {
-        HandshakeResponseCode createdCode = null;
-        if (isFirst) {
-            createdCode = responseCode;
-        } else {
-            if (HandshakeResponseCode.DUPLEX_COMMUNICATION == responseCode) {
-                createdCode = HandshakeResponseCode.ALREADY_DUPLEX_COMMUNICATION;
-            } else if (HandshakeResponseCode.SIMPLEX_COMMUNICATION == responseCode) {
-                createdCode = HandshakeResponseCode.ALREADY_SIMPLEX_COMMUNICATION;
-            } else {
-                createdCode = responseCode;
-            }
-        }
+        final HandshakeResponseCode createdCode = getHandshakeResponseCode(responseCode, isFirst);
 
         Map<String, Object> result = new HashMap<String, Object>();
         result.put(ControlHandshakeResponsePacket.CODE, createdCode.getCode());
         result.put(ControlHandshakeResponsePacket.SUB_CODE, createdCode.getSubCode());
         if (localClusterOption.isEnable()) {
-            result.put(ControlHandshakeResponsePacket.CLUSTER, localClusterOption.getProperties());
+            Map<String, Object> clusterOption = localClusterOption.toMap();
+            result.put(ControlHandshakeResponsePacket.CLUSTER, clusterOption);
         }
 
         return result;
+    }
+
+    private HandshakeResponseCode getHandshakeResponseCode(HandshakeResponseCode responseCode, boolean isFirst) {
+        if (isFirst) {
+            return responseCode;
+        }
+        if (HandshakeResponseCode.DUPLEX_COMMUNICATION == responseCode) {
+            return HandshakeResponseCode.ALREADY_DUPLEX_COMMUNICATION;
+        } else if (HandshakeResponseCode.SIMPLEX_COMMUNICATION == responseCode) {
+            return HandshakeResponseCode.ALREADY_SIMPLEX_COMMUNICATION;
+        }
+
+        return responseCode;
     }
 
     private void sendHandshakeResponse0(int requestId, Map<String, Object> data) {
@@ -540,7 +543,7 @@ public class DefaultPinpointServer implements PinpointServer {
             logger.warn(e.getMessage(), e);
         }
 
-        return Collections.EMPTY_MAP;
+        return Collections.emptyMap();
     }
 
     public boolean isEnableCommunication() {

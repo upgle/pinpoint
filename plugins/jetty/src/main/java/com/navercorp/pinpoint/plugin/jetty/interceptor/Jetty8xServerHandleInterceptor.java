@@ -16,30 +16,28 @@
 
 package com.navercorp.pinpoint.plugin.jetty.interceptor;
 
-import com.navercorp.pinpoint.bootstrap.config.Filter;
 import com.navercorp.pinpoint.bootstrap.context.MethodDescriptor;
 import com.navercorp.pinpoint.bootstrap.context.TraceContext;
 import org.eclipse.jetty.server.AbstractHttpConnection;
-import org.eclipse.jetty.server.Request;
 
-import java.lang.reflect.Method;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 
 /**
  * @author Taejin Koo
  * @author jaehong.kim
- *
+ * <p>
  * jetty-8.1, jetty-8.2
  */
 public class Jetty8xServerHandleInterceptor extends AbstractServerHandleInterceptor {
 
-    private volatile Method getRequestMethod;
-
-    public Jetty8xServerHandleInterceptor(TraceContext traceContext, MethodDescriptor descriptor, Filter<String> excludeFilter) {
-        super(traceContext, descriptor, excludeFilter);
+    public Jetty8xServerHandleInterceptor(TraceContext traceContext, MethodDescriptor descriptor) {
+        super(traceContext, descriptor);
     }
 
     @Override
-    protected Request getRequest(final Object[] args) {
+    HttpServletRequest toHttpServletRequest(Object[] args) {
         if (args == null || args.length < 1) {
             return null;
         }
@@ -55,10 +53,18 @@ public class Jetty8xServerHandleInterceptor extends AbstractServerHandleIntercep
     }
 
     @Override
-    String getHeader(final Request request, final String name) {
-        if (request == null) {
+    HttpServletResponse toHttpServletResponse(Object[] args) {
+        if (args == null || args.length < 1) {
             return null;
         }
-        return request.getHeader(name);
+
+        if (args[0] instanceof AbstractHttpConnection) {
+            try {
+                AbstractHttpConnection connection = (AbstractHttpConnection) args[0];
+                return connection.getResponse();
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 }

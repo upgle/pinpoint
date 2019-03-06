@@ -1,6 +1,15 @@
+---
+title: Marking Transaction as Fail
+keywords: http, code fail, failure, http status
+last_updated: Feb 1, 2018
+sidebar: mydoc_sidebar
+permalink: httpstatuscodefailure.html
+disqus: false
+---
+
 # HTTP Status Code with Request Failure.
 
-![overview](img/http-status-code-failure-overview.png)
+![overview](images/http-status-code-failure-overview.png)
 
 ## Pinpoint Configuration
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2017 NAVER Corp.
+ * Copyright 2018 NAVER Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,11 +22,13 @@ import com.navercorp.pinpoint.common.trace.ServiceTypeFactory;
 /**
  * @author HyunGil Jeong
  */
-public interface RxJavaPluginConstants {
+public final class RxJavaPluginConstants {
+    private RxJavaPluginConstants() {
+    }
 
-    ServiceType RX_JAVA = ServiceTypeFactory.of(6500, "RX_JAVA");
-    ServiceType RX_JAVA_INTERNAL = ServiceTypeFactory.of(6501, "RX_JAVA_INTERNAL", "RX_JAVA");
+    public static final ServiceType RX_JAVA = ServiceTypeFactory.of(6500, "RX_JAVA");
+    public static final ServiceType RX_JAVA_INTERNAL = ServiceTypeFactory.of(6501, "RX_JAVA_INTERNAL", "RX_JAVA");
 
-    String RX_JAVA_SUBSCRIBE_SCOPE = "RxJavaObservableSubscribeScope";
-    String RX_JAVA_OBSERVABLE_SCOPE = "RxJavaObservableScope";
+    public static final String RX_JAVA_SUBSCRIBE_SCOPE = "RxJavaObservableSubscribeScope";
+    public static final String RX_JAVA_OBSERVABLE_SCOPE = "RxJavaObservableScope";
 }

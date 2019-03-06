@@ -5,16 +5,15 @@
 	pinpointApp.directive("loadChartDirective", ["loadChartDirectiveConfig", "$rootScope", "$timeout", "AnalyticsService", "PreferenceService", "CommonUtilService", function (cfg, $rootScope, $timeout, AnalyticsService, PreferenceService, CommonUtilService ) {
 		var responseTypeColor = PreferenceService.getResponseTypeColor();
         return {
-			template: "<div style='text-align:center;user-select:none;'></div>",
+			template: "<div style='text-align:center;user-select:none;'><canvas></canvas></div>",
             replace: true,
             restrict: 'EA',
             scope: {
                 namespace: '@' // string value
             },
-            link: function postLink(scope, element, attrs) {
-
-                // define variables
-                var id, aDynamicKey, oChart;
+            link: function postLink(scope, element) {
+                var id, oChart = null;
+                var elCanvas = element.find("canvas");
 
                 function setIdAutomatically() {
                     id = 'loadId-' + scope.namespace;
@@ -25,9 +24,11 @@
 					element.css('width', w || '100%');
 					element.css('height', h || '220px');
                 }
-                function renderChart(data, yMax, useChartCursor) {
-                	element.empty().append("<canvas>");
-					oChart = new Chart(element.find("canvas"), {
+                function renderChart(data, yMax) {
+                	if ( oChart !== null ) {
+                		oChart.destroy();
+					}
+					oChart = new Chart(elCanvas, {
 						type: "bar",
 						data: {
 							labels: data.labels,
@@ -158,6 +159,8 @@
 							element.find("h4").hide().end().find("canvas").show();
 							if ( yMax ) {
 								oChart.config.options.scales.yAxes[0].ticks.max = yMax;
+							} else {
+								delete oChart.config.options.scales.yAxes[0].ticks.max;
 							}
 							oChart.data.labels = data.labels;
 							oChart.data.datasets[0].data = data.keyValues[0].values;
@@ -211,7 +214,11 @@
                 });
 
                 scope.$on("loadChartDirective.updateData." + scope.namespace, function (event, data, yMax) {
-					updateChart(parseTimeSeriesHistogram(data), yMax);
+					if ( scope.namespace === "forServerList" ) {
+						updateChart(parseTimeSeriesHistogram(data), yMax);
+					} else {
+						updateChart(parseTimeSeriesHistogram(data));
+					}
                 });
             }
         };

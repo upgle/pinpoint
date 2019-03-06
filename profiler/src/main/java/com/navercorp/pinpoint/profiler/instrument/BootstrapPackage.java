@@ -16,17 +16,39 @@
 
 package com.navercorp.pinpoint.profiler.instrument;
 
-import java.util.Arrays;
-import java.util.List;
+import com.navercorp.pinpoint.profiler.util.JavaAssistUtils;
 
 /**
  * @author Woonduk Kang(emeroad)
  */
 public class BootstrapPackage {
 
-    private static final List<String> BOOTSTRAP_PACKAGE_LIST = Arrays.asList("com.navercorp.pinpoint.bootstrap", "com.navercorp.pinpoint.common", "com.navercorp.pinpoint.exception");
+    public BootstrapPackage() {
+    }
+
+    private static final String[] BOOTSTRAP_PACKAGE_LIST = {
+            "com.navercorp.pinpoint.bootstrap",
+            "com.navercorp.pinpoint.common",
+            "com.navercorp.pinpoint.exception"
+    };
+
+    private static final String[] INTERNAL_BOOTSTRAP_PACKAGE_LIST = toInternalName(BOOTSTRAP_PACKAGE_LIST);
+
+    private static String[] toInternalName(String[] bootstrapPackageList) {
+        String[] internalPackageNames = new String[bootstrapPackageList.length];
+        for (int i = 0; i < bootstrapPackageList.length; i++) {
+            String packageName = bootstrapPackageList[i];
+            internalPackageNames[i] = JavaAssistUtils.javaNameToJvmName(packageName);
+        }
+        return internalPackageNames;
+    }
+
 
     public boolean isBootstrapPackage(String className) {
+        if (className == null) {
+            return false;
+        }
+
         for (String bootstrapPackage : BOOTSTRAP_PACKAGE_LIST) {
             if (className.startsWith(bootstrapPackage)) {
                 return true;
@@ -34,4 +56,20 @@ public class BootstrapPackage {
         }
         return false;
     }
+
+
+    public boolean isBootstrapPackageByInternalName(String internalClassName) {
+        if (internalClassName == null) {
+            return false;
+        }
+
+        for (String bootstrapPackage : INTERNAL_BOOTSTRAP_PACKAGE_LIST) {
+            if (internalClassName.startsWith(bootstrapPackage)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
 }

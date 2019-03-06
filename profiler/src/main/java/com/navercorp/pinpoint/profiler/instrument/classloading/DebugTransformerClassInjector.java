@@ -19,14 +19,13 @@ import java.io.InputStream;
 
 import com.navercorp.pinpoint.exception.PinpointException;
 import com.navercorp.pinpoint.profiler.instrument.BootstrapPackage;
-import com.navercorp.pinpoint.profiler.instrument.classloading.ClassInjector;
 
 /**
  * @author Woonduk Kang(emeroad)
  */
 public class DebugTransformerClassInjector implements ClassInjector {
 
-    private final BootstrapPackage bootstrapPackage = new BootstrapPackage();
+    private static final BootstrapPackage bootstrapPackage = new BootstrapPackage();
 
     public DebugTransformerClassInjector() {
     }
@@ -34,13 +33,13 @@ public class DebugTransformerClassInjector implements ClassInjector {
     @Override
     @SuppressWarnings("unchecked")
     public <T> Class<? extends T> injectClass(ClassLoader classLoader, String className) {
-
-        ClassLoader targetClassLoader = getClassLoader(classLoader);
-
-        targetClassLoader = filterBootstrapPackage(targetClassLoader, className);
+        ClassLoader targetClassLoader = classLoader;
+        if (bootstrapPackage.isBootstrapPackage(className)) {
+            targetClassLoader = Object.class.getClassLoader();
+        }
 
         try {
-            return (Class<? extends T>) targetClassLoader.loadClass(className);
+            return (Class<? extends T>) Class.forName(className, false, targetClassLoader);
         } catch (ClassNotFoundException e) {
             throw new PinpointException("ClassNo class " + className + " with classLoader " + classLoader, e);
         }
@@ -48,12 +47,12 @@ public class DebugTransformerClassInjector implements ClassInjector {
 
 
     @Override
-    public InputStream getResourceAsStream(ClassLoader classLoader, String classPath) {
+    public InputStream getResourceAsStream(ClassLoader classLoader, String internalName) {
         ClassLoader targetClassLoader = getClassLoader(classLoader);
 
-        targetClassLoader = filterBootstrapPackage(targetClassLoader, classPath);
+        targetClassLoader = filterBootstrapPackage(targetClassLoader, internalName);
 
-        return targetClassLoader.getResourceAsStream(classPath);
+        return targetClassLoader.getResourceAsStream(internalName);
     }
 
     private static ClassLoader getClassLoader(ClassLoader classLoader) {
@@ -65,7 +64,7 @@ public class DebugTransformerClassInjector implements ClassInjector {
 
 
     private ClassLoader filterBootstrapPackage(ClassLoader classLoader, String classPath) {
-        if (bootstrapPackage.isBootstrapPackage(classPath)) {
+        if (bootstrapPackage.isBootstrapPackageByInternalName(classPath)) {
             return ClassLoader.getSystemClassLoader();
         }
         return classLoader;

@@ -1,11 +1,11 @@
 /*
- * Copyright 2017 NAVER Corp.
+ * Copyright 2018 NAVER Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,9 +17,13 @@ package com.navercorp.pinpoint.flink.receiver;
 
 
 import com.navercorp.pinpoint.collector.handler.SimpleHandler;
+import com.navercorp.pinpoint.flink.vo.RawData;
+import com.navercorp.pinpoint.io.request.ServerRequest;
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext;
 import org.apache.thrift.TBase;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -34,8 +38,14 @@ public class AgentStatHandler implements SimpleHandler {
     }
 
     @Override
-    public void handleSimple(TBase<?, ?> tBase) {
-        sourceContext.collect(tBase);
-    }
+    public void handleSimple(ServerRequest serverRequest) {
+        if (!(serverRequest.getData() instanceof TBase<?, ?>)) {
+            throw new UnsupportedOperationException("data is not support type : " + serverRequest.getData());
+        }
+        final TBase<?, ?> tBase = (TBase<?, ?>) serverRequest.getData();
+        final Map<String, String> metaInfo = new HashMap<>(serverRequest.getHeaderEntity().getEntityAll());
 
+        RawData rawData = new RawData(tBase, metaInfo);
+        sourceContext.collect(rawData);
+    }
 }

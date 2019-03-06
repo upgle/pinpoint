@@ -16,11 +16,13 @@
 
 package com.navercorp.pinpoint.profiler;
 
+import com.navercorp.pinpoint.common.util.CodeSourceUtils;
 import com.navercorp.pinpoint.profiler.util.JavaAssistUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.instrument.ClassFileTransformer;
+import java.net.URL;
 import java.security.ProtectionDomain;
 
 /**
@@ -29,7 +31,6 @@ import java.security.ProtectionDomain;
  */
 public class BaseClassFileTransformer {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
-    private final boolean isDebug = logger.isDebugEnabled();
 
     private final ClassLoader agentClassLoader;
 
@@ -40,12 +41,11 @@ public class BaseClassFileTransformer {
     public byte[] transform(ClassLoader classLoader, String classInternalName, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classFileBuffer, ClassFileTransformer transformer) {
         final String className = JavaAssistUtils.jvmNameToJavaName(classInternalName);
 
-        if (isDebug) {
-            if (classBeingRedefined == null) {
-                logger.debug("[transform] classLoader:{} className:{} transformer:{}", classLoader, className, transformer.getClass().getName());
-            } else {
-                logger.debug("[retransform] classLoader:{} className:{} transformer:{}", classLoader, className, transformer.getClass().getName());
-            }
+        if (logger.isDebugEnabled()) {
+            final URL codeLocation = CodeSourceUtils.getCodeLocation(protectionDomain);
+            final String transform = getTransformState(classBeingRedefined);
+            logger.debug("[{}] classLoader:{} className:{} transformer:{} codeSource:{}",
+                    transform, classLoader, className, transformer.getClass().getName(), codeLocation);
         }
 
         try {
@@ -59,10 +59,18 @@ public class BaseClassFileTransformer {
                 thread.setContextClassLoader(before);
             }
         } catch (Throwable e) {
-            logger.error("Transformer:{} threw an exception. cl:{} ctxCl:{} agentCl:{} Cause:{}",
-                    transformer.getClass().getName(), classLoader, Thread.currentThread().getContextClassLoader(), agentClassLoader, e.getMessage(), e);
+            final URL codeLocation = CodeSourceUtils.getCodeLocation(protectionDomain);
+            logger.error("Transformer:{} threw an exception. codeLocation:{} cl:{} ctxCl:{} agentCl:{} Cause:{}",
+                    transformer.getClass().getName(), codeLocation, classLoader, Thread.currentThread().getContextClassLoader(), agentClassLoader, e.getMessage(), e);
             return null;
         }
+    }
+
+    private String getTransformState(Class<?> classBeingRedefined) {
+        if (classBeingRedefined == null) {
+            return "transform";
+        }
+        return "retransform";
     }
 
     private ClassLoader getContextClassLoader(Thread thread) throws Throwable {
@@ -71,7 +79,7 @@ public class BaseClassFileTransformer {
         } catch (SecurityException se) {
             throw se;
         } catch (Throwable th) {
-            if (isDebug) {
+            if (logger.isDebugEnabled()) {
                 logger.debug("getContextClassLoader(). Caused:{}", th.getMessage(), th);
             }
             throw th;

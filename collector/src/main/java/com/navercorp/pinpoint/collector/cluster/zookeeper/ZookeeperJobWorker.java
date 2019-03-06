@@ -16,8 +16,10 @@
 
 package com.navercorp.pinpoint.collector.cluster.zookeeper;
 
-import com.navercorp.pinpoint.collector.cluster.zookeeper.exception.PinpointZookeeperException;
 import com.navercorp.pinpoint.collector.cluster.zookeeper.job.ZookeeperJob;
+import com.navercorp.pinpoint.common.server.cluster.zookeeper.ZookeeperClient;
+import com.navercorp.pinpoint.common.server.cluster.zookeeper.ZookeeperConstants;
+import com.navercorp.pinpoint.common.server.cluster.zookeeper.exception.PinpointZookeeperException;
 import com.navercorp.pinpoint.common.server.util.concurrent.CommonStateContext;
 import com.navercorp.pinpoint.common.util.BytesUtils;
 import com.navercorp.pinpoint.common.util.CollectionUtils;
@@ -28,6 +30,7 @@ import com.navercorp.pinpoint.rpc.util.ClassUtils;
 import com.navercorp.pinpoint.rpc.util.ListUtils;
 import com.navercorp.pinpoint.rpc.util.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.curator.utils.ZKPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,10 +47,6 @@ import java.util.concurrent.ThreadFactory;
  */
 public class ZookeeperJobWorker implements Runnable {
 
-    private static final String PINPOINT_CLUSTER_PATH = "/pinpoint-cluster";
-    private static final String PINPOINT_COLLECTOR_CLUSTER_PATH = PINPOINT_CLUSTER_PATH + "/collector";
-
-    private static final String PATH_SEPARATOR = "/";
     private static final String PROFILER_SEPARATOR = "\r\n";
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -68,7 +67,7 @@ public class ZookeeperJobWorker implements Runnable {
 
         this.workerState = new CommonStateContext();
 
-        this.collectorUniqPath = bindingPathAndZNode(PINPOINT_COLLECTOR_CLUSTER_PATH, serverIdentifier);
+        this.collectorUniqPath = ZKPaths.makePath(ZookeeperConstants.PINPOINT_COLLECTOR_CLUSTER_PATH, serverIdentifier);
     }
 
     public void start() {
@@ -122,18 +121,6 @@ public class ZookeeperJobWorker implements Runnable {
         logger.info("stop() completed.");
     }
 
-    private String bindingPathAndZNode(String path, String zNodeName) {
-        StringBuilder fullPath = new StringBuilder(StringUtils.length(path) + StringUtils.length(zNodeName) + 1);
-
-        fullPath.append(path);
-        if (!path.endsWith(PATH_SEPARATOR)) {
-            fullPath.append(PATH_SEPARATOR);
-        }
-        fullPath.append(zNodeName);
-
-        return fullPath.toString();
-    }
-
     public void addPinpointServer(PinpointServer pinpointServer) {
         if (logger.isDebugEnabled()) {
             logger.debug("addPinpointServer server:{}, properties:{}", pinpointServer, pinpointServer.getChannelProperties());
@@ -160,15 +147,22 @@ public class ZookeeperJobWorker implements Runnable {
     }
 
     private String getClusterData() throws PinpointZookeeperException, InterruptedException {
-        final byte[] clusterBytes = zookeeperClient.getData(collectorUniqPath);
-        return BytesUtils.toString(clusterBytes);
+        try {
+            final byte[] result = zookeeperClient.getData(collectorUniqPath);
+            if (result == null) {
+                return StringUtils.EMPTY;
+            }
+            return BytesUtils.toString(result);
+        } catch (Exception e) {
+            logger.warn("getClusterData failed. message:{}", e.getMessage(), e);
+        }
+        return StringUtils.EMPTY;
     }
 
-    private void setClusterData(String clusterString) throws PinpointZookeeperException, InterruptedException {
-        final byte[] clusterBytes = BytesUtils.toBytes(clusterString);
-        zookeeperClient.setData(collectorUniqPath, clusterBytes);
+    private void setClusterData(String value) throws Exception {
+        final byte[] payload = BytesUtils.toBytes(value);
+        zookeeperClient.createOrSetNode(collectorUniqPath, payload);
     }
-
 
     public void removePinpointServer(PinpointServer pinpointServer) {
         if (logger.isDebugEnabled()) {
@@ -338,19 +332,12 @@ public class ZookeeperJobWorker implements Runnable {
         final List<String> addContentCandidateList = getZookeeperKeyList(zookeeperJobList);
 
         try {
-            if (zookeeperClient.exists(collectorUniqPath)) {
-                final String currentClusterData = getClusterData();
+            zookeeperClient.createPath(collectorUniqPath);
 
-                final String updateCluster = addIfAbsentContents(currentClusterData, addContentCandidateList);
-                setClusterData(updateCluster);
-            } else {
-                zookeeperClient.createPath(collectorUniqPath);
+            String currentData = getClusterData();
+            final String newData = addIfAbsentContents(currentData, addContentCandidateList);
 
-                // should return error even if NODE exists if the data is important
-                final String newClusterData = addIfAbsentContents("", addContentCandidateList);
-                final byte[] newClusterDataBytes = BytesUtils.toBytes(newClusterData);
-                zookeeperClient.createNode(collectorUniqPath, newClusterDataBytes);
-            }
+            setClusterData(newData);
             return true;
         } catch (Exception e) {
             logger.warn("handleUpdate failed. caused:{}, jobSize:{}", e.getMessage(), zookeeperJobList.size(), e);
@@ -366,12 +353,12 @@ public class ZookeeperJobWorker implements Runnable {
         final List<String> removeContentCandidateList = getZookeeperKeyList(zookeeperJobList);
 
         try {
-            if (zookeeperClient.exists(collectorUniqPath)) {
-                final String currentClusterData = getClusterData();
+            zookeeperClient.createPath(collectorUniqPath);
 
-                final String remainCluster = removeIfExistContents(currentClusterData, removeContentCandidateList);
-                setClusterData(remainCluster);
-            }
+            final String currentData = getClusterData();
+            final String newData = removeIfExistContents(currentData, removeContentCandidateList);
+
+            setClusterData(newData);
             return true;
         } catch (Exception e) {
             logger.warn("handleDelete failed. caused:{}, jobSize:{}", e.getMessage(), zookeeperJobList.size(), e);
@@ -397,14 +384,8 @@ public class ZookeeperJobWorker implements Runnable {
         }
 
         try {
-            if (zookeeperClient.exists(collectorUniqPath)) {
-                zookeeperClient.setData(collectorUniqPath, EMPTY_DATA_BYTES);
-            } else {
-                zookeeperClient.createPath(collectorUniqPath);
-
-                // should return error even if NODE exists if the data is important
-                zookeeperClient.createNode(collectorUniqPath, EMPTY_DATA_BYTES);
-            }
+            zookeeperClient.createPath(collectorUniqPath);
+            zookeeperClient.createOrSetNode(collectorUniqPath, EMPTY_DATA_BYTES);
             return true;
         } catch (Exception e) {
             logger.warn("handleClear failed. caused:{}, jobSize:{}", e.getMessage(), zookeeperJobList.size(), e);
@@ -464,6 +445,10 @@ public class ZookeeperJobWorker implements Runnable {
     }
 
     private List<String> tokenize(String str) {
+        if (StringUtils.isEmpty(str)) {
+            return Collections.emptyList();
+        }
+
         final String[] tokenArray = org.springframework.util.StringUtils.tokenizeToStringArray(str, PROFILER_SEPARATOR);
         return Arrays.asList(tokenArray);
     }

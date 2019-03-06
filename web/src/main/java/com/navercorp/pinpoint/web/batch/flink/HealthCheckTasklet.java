@@ -47,9 +47,6 @@ public class HealthCheckTasklet implements Tasklet {
     @Autowired
     private BatchConfiguration batchConfiguration;
 
-    @Autowired(required=false)
-    private AlarmMessageSender alarmMessageSender = new EmptyMessageSender();
-
     public HealthCheckTasklet() {
         this.jobNameList = new ArrayList<>(1);
         jobNameList.add("Aggregation Stat Data");
@@ -59,7 +56,7 @@ public class HealthCheckTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         List<String> urlList = generatedFlinkManagerServerApi();
 
-        if (urlList.size() == 0) {
+        if (urlList.isEmpty()) {
             return RepeatStatus.FINISHED;
         }
 
@@ -118,7 +115,7 @@ public class HealthCheckTasklet implements Tasklet {
         List<String> urlList = new ArrayList<>(flinkServerList.size());
 
         for (String flinkServerIp : flinkServerList) {
-            urlList.add(String.format("http://%s:8081/joboverview", flinkServerIp));
+            urlList.add(String.format(URL_FORMAT, flinkServerIp));
         }
 
         return urlList;

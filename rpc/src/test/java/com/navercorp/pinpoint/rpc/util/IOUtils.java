@@ -16,8 +16,8 @@
 
 package com.navercorp.pinpoint.rpc.util;
 
-import com.navercorp.pinpoint.rpc.TestAwaitTaskUtils;
-import com.navercorp.pinpoint.rpc.TestAwaitUtils;
+import com.navercorp.pinpoint.test.utils.TestAwaitTaskUtils;
+import com.navercorp.pinpoint.test.utils.TestAwaitUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -65,19 +65,11 @@ public final class IOUtils {
     }
 
     public static void close(Socket socket) throws IOException {
-        close(socket, false);
+        com.navercorp.pinpoint.common.util.IOUtils.close(socket);
     }
 
-    public static void close(Socket socket, boolean quietly) throws IOException {
-        if (socket != null) {
-            try {
-                socket.close();
-            } catch (final IOException ioe) {
-                if (!quietly) {
-                    throw ioe;
-                }
-            }
-        }
+    public static void closeQuietly(Socket socket) {
+        com.navercorp.pinpoint.common.util.IOUtils.closeQuietly(socket);
     }
 
 }

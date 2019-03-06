@@ -58,6 +58,13 @@
 	    				addSelectClass( AlarmUtilService.extractID( $el ) );
 						scope.$emit( "userGroup.selectedUserGroup", $el.find(".contents").html() );
 	    			}
+	    			function releaseGroup( groupNumber ) {
+						if ( selectedGroupNumber !== groupNumber ) {
+							return;
+						}
+						selectedGroupNumber = "";
+						scope.$emit( "userGroup.selectedNone" );
+					}
 					function addSelectClass( newSelectedGroupNumber ) {
 						$( "#" + scope.prefix + selectedGroupNumber ).removeClass("selected");
 						$( "#" + scope.prefix + newSelectedGroupNumber ).addClass("selected");
@@ -81,7 +88,7 @@
 						cancelPreviousWork();
 						var query = $.trim( $elSearchInput.val() );
 						if ( query === "" ) {
-							loadData({});
+							loadData("");
 						} else {
 							if ( query.length < CONSTS.MIN_GROUPNAME_LENGTH ) {
 								$elSearchInput.val("");
@@ -134,6 +141,7 @@
 					};
 					scope.onApplyRemoveUserGroup = function() {
 						SystemConfigService.getConfig().then(function(config) {
+							var groupNumber = AlarmUtilService.extractID($workingNode);
 							RemoveUserGroup.applyAction( AlarmUtilService, $workingNode, $elLoading, config["userId"], function( groupId ) {
 								for (var i = 0; i < oUserGroupList.length; i++) {
 									if ( oUserGroupList[i].id == groupId ) {
@@ -141,6 +149,7 @@
 										break;
 									}
 								}
+								releaseGroup( groupNumber );
 								scope.$apply(function () {
 									scope.userGroupList = oUserGroupList;
 								});
@@ -171,7 +180,7 @@
 					};
 					scope.$on("configuration.userGroup.show", function() {
 	    				if ( bIsLoaded === false ) {
-	    					loadData({});
+	    					loadData("");
 	    				}
 	    			});
 	            }

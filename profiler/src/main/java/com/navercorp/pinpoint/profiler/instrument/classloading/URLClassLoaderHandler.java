@@ -16,6 +16,7 @@
 
 package com.navercorp.pinpoint.profiler.instrument.classloading;
 
+import com.navercorp.pinpoint.common.util.Assert;
 import com.navercorp.pinpoint.exception.PinpointException;
 import com.navercorp.pinpoint.profiler.plugin.PluginConfig;
 import org.slf4j.Logger;
@@ -43,19 +44,16 @@ public class URLClassLoaderHandler implements ClassInjector {
             ADD_URL = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
             ADD_URL.setAccessible(true);
         } catch (Exception e) {
-            throw new PinpointException("Cannot access URLClassLoader.addURL(URL)", e);
+            throw new IllegalStateException("Cannot access URLClassLoader.addURL(URL)", e);
         }
     }
 
-    private final URL pluginURL;
-    private final String pluginURLString;
+    private final PluginConfig pluginConfig;
+    private final BootstrapCore bootstrapCore;
 
-    public URLClassLoaderHandler(PluginConfig pluginConfig) {
-        if (pluginConfig == null) {
-            throw new NullPointerException("pluginConfig must not be null");
-        }
-        this.pluginURL = pluginConfig.getPluginJar();
-        this.pluginURLString = pluginURL.toExternalForm();
+    public URLClassLoaderHandler(PluginConfig pluginConfig, BootstrapCore bootstrapCore) {
+        this.pluginConfig = Assert.requireNonNull(pluginConfig, "pluginConfig must not be null");
+        this.bootstrapCore = Assert.requireNonNull(bootstrapCore, "bootstrapCore must not be null");
     }
 
     @Override
@@ -75,29 +73,33 @@ public class URLClassLoaderHandler implements ClassInjector {
     }
 
     @Override
-    public InputStream getResourceAsStream(ClassLoader targetClassLoader, String classPath) {
+    public InputStream getResourceAsStream(ClassLoader targetClassLoader, String internalName) {
         try {
             if (targetClassLoader instanceof URLClassLoader) {
+                if (bootstrapCore.isBootstrapPackageByInternalName(internalName)) {
+                    return bootstrapCore.openStream(internalName);
+                }
+
                 final URLClassLoader urlClassLoader = (URLClassLoader) targetClassLoader;
                 addPluginURLIfAbsent(urlClassLoader);
-                return targetClassLoader.getResourceAsStream(classPath);
+                return targetClassLoader.getResourceAsStream(internalName);
             }
         } catch (Exception e) {
-            logger.warn("Failed to load plugin resource as stream {} with classLoader {}", classPath, targetClassLoader, e);
+            logger.warn("Failed to load plugin resource as stream {} with classLoader {}", internalName, targetClassLoader, e);
             return null;
         }
         return null;
     }
 
-    private void addPluginURLIfAbsent(URLClassLoader classLoader) throws IllegalArgumentException, IllegalAccessException, InvocationTargetException, ClassNotFoundException {
+    private void addPluginURLIfAbsent(URLClassLoader classLoader) throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
         final URL[] urls = classLoader.getURLs();
         if (urls != null) {
             final boolean hasPluginJar = hasPluginJar(urls);
             if (!hasPluginJar) {
                 if (isDebug) {
-                    logger.debug("add Jar:{}", pluginURLString);
+                    logger.debug("add Jar:{}", pluginConfig.getPluginJarURLExternalForm());
                 }
-                ADD_URL.invoke(classLoader, pluginURL);
+                ADD_URL.invoke(classLoader, pluginConfig.getPluginJar());
             }
         }
     }
@@ -107,7 +109,7 @@ public class URLClassLoaderHandler implements ClassInjector {
             // if (url.equals(pluginJarURL)) { fix very slow
             // http://michaelscharf.blogspot.com/2006/11/javaneturlequals-and-hashcode-make.html
             final String externalForm = url.toExternalForm();
-            if (pluginURLString.equals(externalForm)) {
+            if (pluginConfig.getPluginJarURLExternalForm().equals(externalForm)) {
                 return true;
             }
         }

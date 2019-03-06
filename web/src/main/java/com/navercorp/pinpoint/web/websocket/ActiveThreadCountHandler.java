@@ -22,6 +22,8 @@ import com.navercorp.pinpoint.rpc.util.ClassUtils;
 import com.navercorp.pinpoint.rpc.util.MapUtils;
 import com.navercorp.pinpoint.web.security.ServerMapDataFilter;
 import com.navercorp.pinpoint.web.service.AgentService;
+import com.navercorp.pinpoint.web.task.TimerTaskDecorator;
+import com.navercorp.pinpoint.web.task.TimerTaskDecoratorFactory;
 import com.navercorp.pinpoint.web.util.SimpleOrderedThreadPool;
 import com.navercorp.pinpoint.web.websocket.message.PinpointWebSocketMessage;
 import com.navercorp.pinpoint.web.websocket.message.PinpointWebSocketMessageConverter;
@@ -68,20 +70,24 @@ public class ActiveThreadCountHandler extends TextWebSocketHandler implements Pi
 
     private final AtomicBoolean onTimerTask = new AtomicBoolean(false);
 
+
     private SimpleOrderedThreadPool webSocketFlushExecutor;
 
-    private java.util.Timer flushTimer;
+    private Timer flushTimer;
     private static final long DEFAULT_FLUSH_DELAY = 1000;
     private final long flushDelay;
 
-    private java.util.Timer healthCheckTimer;
+    private Timer healthCheckTimer;
     private static final long DEFAULT_HEALTH_CHECk_DELAY = 60 * 1000;
     private final long healthCheckDelay;
 
-    private java.util.Timer reactiveTimer;
-    
+    private Timer reactiveTimer;
+
     @Autowired(required=false)
     ServerMapDataFilter serverMapDataFilter;
+
+    @Autowired(required = false)
+    private TimerTaskDecoratorFactory timerTaskDecoratorFactory = new PinpointWebSocketTimerTaskDecoratorFactory();
 
     public ActiveThreadCountHandler(AgentService agentService) {
         this(DEFAULT_REQUEST_MAPPING, agentService);
@@ -113,7 +119,7 @@ public class ActiveThreadCountHandler extends TextWebSocketHandler implements Pi
     }
 
     private Timer newJavaTimer(String timerName) {
-        return new java.util.Timer(timerName, true);
+        return new Timer(timerName, true);
     }
 
     @Override
@@ -272,7 +278,8 @@ public class ActiveThreadCountHandler extends TextWebSocketHandler implements Pi
 
         PinpointWebSocketResponseAggregator responseAggregator = aggregatorRepository.get(applicationName);
         if (responseAggregator == null) {
-            responseAggregator = new ActiveThreadCountResponseAggregator(applicationName, agentService, reactiveTimer);
+            TimerTaskDecorator timerTaskDecorator = timerTaskDecoratorFactory.createTimerTaskDecorator();
+            responseAggregator = new ActiveThreadCountResponseAggregator(applicationName, agentService, reactiveTimer, timerTaskDecorator);
             responseAggregator.start();
             aggregatorRepository.put(applicationName, responseAggregator);
         }

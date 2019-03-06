@@ -22,7 +22,7 @@ import java.util.Map;
 import com.datastax.driver.core.BatchStatement;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.RegularStatement;
-import com.datastax.driver.core.StatementWrapper;
+import com.datastax.driver.core.Statement;
 import com.navercorp.pinpoint.bootstrap.context.DatabaseInfo;
 import com.navercorp.pinpoint.bootstrap.context.MethodDescriptor;
 import com.navercorp.pinpoint.bootstrap.context.ParsingResult;
@@ -37,6 +37,8 @@ import com.navercorp.pinpoint.bootstrap.plugin.jdbc.DatabaseInfoAccessor;
 import com.navercorp.pinpoint.bootstrap.plugin.jdbc.ParsingResultAccessor;
 import com.navercorp.pinpoint.bootstrap.plugin.jdbc.UnKnownDatabaseInfo;
 import com.navercorp.pinpoint.bootstrap.plugin.jdbc.bindvalue.BindValueUtils;
+import com.navercorp.pinpoint.common.util.MapUtils;
+import com.navercorp.pinpoint.plugin.cassandra.field.WrappedStatementGetter;
 
 /**
  * @author dawidmalina
@@ -102,7 +104,7 @@ public class CassandraStatementExecuteQueryInterceptor implements AroundIntercep
                 Map<Integer, String> bindValue = ((BindValueAccessor) target)._$PINPOINT$_getBindValue();
                 // TODO Add bind variable interceptors to BoundStatement's setter methods and bind method and pass it down
                 // Extracting bind variables from already-serialized is too risky
-                if (bindValue != null && !bindValue.isEmpty()) {
+                if (MapUtils.hasLength(bindValue)) {
                     String bindString = toBindVariable(bindValue);
                     recorder.recordSqlParsingResult(parsingResult, bindString);
                 } else {
@@ -121,23 +123,24 @@ public class CassandraStatementExecuteQueryInterceptor implements AroundIntercep
     }
 
     private String retrieveSql(Object args0) {
-        String sql;
         if (args0 instanceof BoundStatement) {
-            sql = ((BoundStatement) args0).preparedStatement().getQueryString();
+            return ((BoundStatement) args0).preparedStatement().getQueryString();
         } else if (args0 instanceof RegularStatement) {
-            sql = ((RegularStatement) args0).getQueryString();
-        } else if (args0 instanceof StatementWrapper) {
-            // method to get wrapped statement is package-private, skip.
-            sql = null;
+            return ((RegularStatement) args0).getQueryString();
+        } else if (args0 instanceof WrappedStatementGetter) {
+            return retrieveWrappedStatement((WrappedStatementGetter) args0);
         } else if (args0 instanceof BatchStatement) {
             // we could unroll all the batched statements and append ; between them if need be but it could be too long.
-            sql = null;
+            return null;
         } else if (args0 instanceof String) {
-            sql = (String) args0;
-        } else {
-            sql = null;
+            return (String) args0;
         }
-        return sql;
+        return null;
+    }
+
+    private String retrieveWrappedStatement(WrappedStatementGetter wrappedStatementGetter) {
+        Statement wrappedStatement = wrappedStatementGetter._$PINPOINT$_getStatement();
+        return retrieveSql(wrappedStatement);
     }
 
     private void clean(Object target) {
@@ -156,7 +159,7 @@ public class CassandraStatementExecuteQueryInterceptor implements AroundIntercep
             logger.afterInterceptor(target, args, result, throwable);
         }
 
-        Trace trace = traceContext.currentTraceObject();
+        final Trace trace = traceContext.currentTraceObject();
         if (trace == null) {
             return;
         }

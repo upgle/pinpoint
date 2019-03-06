@@ -17,18 +17,20 @@
 package com.navercorp.pinpoint.web.config;
 
 
-import com.navercorp.pinpoint.web.websocket.PinpointWebSocketHandler;
-import com.navercorp.pinpoint.web.websocket.PinpointWebSocketHandlerManager;
-import com.navercorp.pinpoint.web.websocket.WebSocketSessionContextPrepareHandshakeInterceptor;
+import com.navercorp.pinpoint.web.websocket.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistration;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.socket.handler.WebSocketHandlerDecoratorFactory;
 import org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor;
+
+import java.util.Objects;
 
 /**
  * @author Taejin Koo
@@ -48,16 +50,27 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Autowired
     private ConfigProperties configProperties;
 
+    @Autowired(required = false)
+    private WebSocketHandlerDecoratorFactory webSocketHandlerDecoratorFactory = new DefaultWebSocketHandlerDecoratorFactory();
+
+    @Autowired(required = false)
+    private CustomHandshakeInterceptor customHandshakeInterceptor = null;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         final String[] allowedOriginArray = getAllowedOriginArray(configProperties.getWebSocketAllowedOrigins());
 
         for (PinpointWebSocketHandler handler : handlerRepository.getWebSocketHandlerRepository()) {
             String path = handler.getRequestMapping() + WEBSOCKET_SUFFIX;
-            final WebSocketHandlerRegistration webSocketHandlerRegistration = registry.addHandler(handler, path);
+
+            WebSocketHandler webSocketHandler = webSocketHandlerDecoratorFactory.decorate(handler);
+            final WebSocketHandlerRegistration webSocketHandlerRegistration = registry.addHandler(webSocketHandler, path);
 
             webSocketHandlerRegistration.addInterceptors(new HttpSessionHandshakeInterceptor());
             webSocketHandlerRegistration.addInterceptors(new WebSocketSessionContextPrepareHandshakeInterceptor());
+            if (Objects.nonNull(customHandshakeInterceptor)) {
+                webSocketHandlerRegistration.addInterceptors(customHandshakeInterceptor);
+            }
             webSocketHandlerRegistration.setAllowedOrigins(allowedOriginArray);
         }
     }

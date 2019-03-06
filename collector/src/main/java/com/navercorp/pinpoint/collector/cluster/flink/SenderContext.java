@@ -15,24 +15,25 @@
  */
 package com.navercorp.pinpoint.collector.cluster.flink;
 
-import com.navercorp.pinpoint.profiler.sender.TcpDataSender;
+import com.navercorp.pinpoint.collector.sender.FlinkTcpDataSender;
+import com.navercorp.pinpoint.common.util.Assert;
 
 /**
  * @author minwoo.jung
  */
 public class SenderContext {
-    private TcpDataSender tcpDataSender;
+    private FlinkTcpDataSender flinkTcpDataSender;
 
-    public SenderContext(TcpDataSender tcpDataSender) {
-        this.tcpDataSender = tcpDataSender;
+    public SenderContext(FlinkTcpDataSender tcpDataSender) {
+        this.flinkTcpDataSender = Assert.requireNonNull(tcpDataSender, "flinkTcpDataSender must not be null");
     }
 
-    public TcpDataSender getTcpDataSender() {
-        return tcpDataSender;
+    public FlinkTcpDataSender getFlinkTcpDataSender() {
+        return flinkTcpDataSender;
     }
 
     public void close() {
-        tcpDataSender.stop();
+        flinkTcpDataSender.stop();
     }
 
 }

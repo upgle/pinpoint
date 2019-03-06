@@ -18,6 +18,7 @@ package com.navercorp.pinpoint.bootstrap.config;
 
 import com.navercorp.pinpoint.bootstrap.util.NumberUtils;
 import com.navercorp.pinpoint.bootstrap.util.spring.PropertyPlaceholderHelper;
+import com.navercorp.pinpoint.common.annotations.VisibleForTesting;
 import com.navercorp.pinpoint.common.util.StringUtils;
 import com.navercorp.pinpoint.common.util.logger.CommonLogger;
 import com.navercorp.pinpoint.common.util.PropertyUtils;
@@ -43,8 +44,6 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     private final Properties properties;
     private final PropertyPlaceholderHelper propertyPlaceholderHelper = new PropertyPlaceholderHelper("${", "}");
 
-    @Deprecated
-    public static final String INSTRUMENT_ENGINE_JAVASSIST = "JAVASSIST";
     public static final String INSTRUMENT_ENGINE_ASM = "ASM";
 
     public static final int DEFAULT_AGENT_STAT_COLLECTION_INTERVAL_MS = 5 * 1000;
@@ -98,6 +97,9 @@ public class DefaultProfilerConfig implements ProfilerConfig {
 
     private int interceptorRegistrySize = 1024 * 8;
 
+    @VisibleForTesting
+    private boolean staticResourceCleanup = false;
+
     private String collectorSpanServerIp = DEFAULT_IP;
     private int collectorSpanServerPort = 9996;
 
@@ -127,6 +129,17 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     private boolean tcpDataSenderCommandActiveThreadDumpEnable = false;
     private boolean tcpDataSenderCommandActiveThreadLightDumpEnable = false;
 
+    private static long DEFAULT_DATA_SENDER_PINPOINT_CLIENT_WRITE_TIMEOUT = 3 * 1000;
+    private long tcpDataSenderPinpointClientWriteTimeout = DEFAULT_DATA_SENDER_PINPOINT_CLIENT_WRITE_TIMEOUT;
+    private static long DEFAULT_DATA_SENDER_PINPOINT_CLIENT_REQUEST_TIMEOUT = 3 * 1000;
+    private long tcpDataSenderPinpointClientRequestTimeout = DEFAULT_DATA_SENDER_PINPOINT_CLIENT_REQUEST_TIMEOUT;
+    private static long DEFAULT_DATA_SENDER_PINPOINT_CLIENT_RECONNECT_INTERVAL = 3 * 1000;
+    private long tcpDataSenderPinpointClientReconnectInterval = DEFAULT_DATA_SENDER_PINPOINT_CLIENT_RECONNECT_INTERVAL;
+    private static long DEFAULT_DATA_SENDER_PINPOINT_CLIENT_PING_INTERVAL = 60 * 1000 * 5;
+    private long tcpDataSenderPinpointClientPingInterval = DEFAULT_DATA_SENDER_PINPOINT_CLIENT_PING_INTERVAL;
+    private static long DEFAULT_DATA_SENDER_PINPOINT_CLIENT_HANDSHAKE_INTERVAL = 60 * 1000 * 1;
+    private long tcpDataSenderPinpointClientHandshakeInterval = DEFAULT_DATA_SENDER_PINPOINT_CLIENT_HANDSHAKE_INTERVAL;
+
     private boolean traceAgentActiveThread = true;
 
     private boolean traceAgentDataSource = false;
@@ -150,6 +163,7 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     private int ioBufferingBufferSize;
 
     private String profileJvmVendorName;
+    private String profileOsName;
     private int profileJvmStatCollectIntervalMs = DEFAULT_AGENT_STAT_COLLECTION_INTERVAL_MS;
     private int profileJvmStatBatchSendCount = DEFAULT_NUM_AGENT_STAT_BATCH_SEND;
     private boolean profilerJvmStatCollectDetailedMetrics;
@@ -168,7 +182,10 @@ public class DefaultProfilerConfig implements ProfilerConfig {
 
     private boolean proxyHttpHeaderEnable = true;
 
-    private List<String> httpStatusCodeErrors = Collections.emptyList();
+    private HttpStatusCodeErrors httpStatusCodeErrors = new HttpStatusCodeErrors();
+
+    private String injectionModuleFactoryClazzName = null;
+    private String applicationNamespace = "";
 
     public DefaultProfilerConfig() {
         this.properties = new Properties();
@@ -278,6 +295,31 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     }
 
     @Override
+    public long getTcpDataSenderPinpointClientWriteTimeout() {
+        return tcpDataSenderPinpointClientWriteTimeout;
+    }
+
+    @Override
+    public long getTcpDataSenderPinpointClientRequestTimeout() {
+        return tcpDataSenderPinpointClientRequestTimeout;
+    }
+
+    @Override
+    public long getTcpDataSenderPinpointClientReconnectInterval() {
+        return tcpDataSenderPinpointClientReconnectInterval;
+    }
+
+    @Override
+    public long getTcpDataSenderPinpointClientPingInterval() {
+        return tcpDataSenderPinpointClientPingInterval;
+    }
+
+    @Override
+    public long getTcpDataSenderPinpointClientHandshakeInterval() {
+        return tcpDataSenderPinpointClientHandshakeInterval;
+    }
+
+    @Override
     public boolean isTraceAgentActiveThread() {
         return traceAgentActiveThread;
     }
@@ -374,6 +416,11 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     }
 
     @Override
+    public String getProfilerOSName() {
+        return profileOsName;
+    }
+
+    @Override
     public int getProfileJvmStatCollectIntervalMs() {
         return profileJvmStatCollectIntervalMs;
     }
@@ -391,6 +438,15 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     @Override
     public long getAgentInfoSendRetryInterval() {
         return agentInfoSendRetryInterval;
+    }
+
+    @Override
+    public boolean getStaticResourceCleanup() {
+        return staticResourceCleanup;
+    }
+
+    public void setStaticResourceCleanup(boolean staticResourceCleanup) {
+        this.staticResourceCleanup = staticResourceCleanup;
     }
 
 
@@ -458,8 +514,18 @@ public class DefaultProfilerConfig implements ProfilerConfig {
     }
 
     @Override
-    public List<String> getHttpStatusCodeErrors() {
+    public HttpStatusCodeErrors getHttpStatusCodeErrors() {
         return httpStatusCodeErrors;
+    }
+
+    @Override
+    public String getInjectionModuleFactoryClazzName() {
+        return injectionModuleFactoryClazzName;
+    }
+
+    @Override
+    public String getApplicationNamespace() {
+        return applicationNamespace;
     }
 
     // for test
@@ -509,6 +575,12 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         this.tcpDataSenderCommandActiveThreadDumpEnable = readBoolean("profiler.tcpdatasender.command.activethread.threaddump.enable", false);
         this.tcpDataSenderCommandActiveThreadLightDumpEnable = readBoolean("profiler.tcpdatasender.command.activethread.threadlightdump.enable", false);
 
+        this.tcpDataSenderPinpointClientWriteTimeout = readLong("profiler.tcpdatasender.client.write.timeout", DEFAULT_DATA_SENDER_PINPOINT_CLIENT_WRITE_TIMEOUT);
+        this.tcpDataSenderPinpointClientRequestTimeout = readLong("profiler.tcpdatasender.client.request.timeout", DEFAULT_DATA_SENDER_PINPOINT_CLIENT_REQUEST_TIMEOUT);
+        this.tcpDataSenderPinpointClientReconnectInterval = readLong("profiler.tcpdatasender.client.reconnect.interval", DEFAULT_DATA_SENDER_PINPOINT_CLIENT_RECONNECT_INTERVAL);
+        this.tcpDataSenderPinpointClientPingInterval = readLong("profiler.tcpdatasender.client.ping.interval", DEFAULT_DATA_SENDER_PINPOINT_CLIENT_PING_INTERVAL);
+        this.tcpDataSenderPinpointClientHandshakeInterval = readLong("profiler.tcpdatasender.client.handshake.interval", DEFAULT_DATA_SENDER_PINPOINT_CLIENT_HANDSHAKE_INTERVAL);
+
         this.traceAgentActiveThread = readBoolean("profiler.pinpoint.activethread", true);
 
         this.traceAgentDataSource = readBoolean("profiler.pinpoint.datasource", false);
@@ -537,11 +609,14 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         // it may be a problem to be here.  need to modify(delete or move or .. )  this configuration.
         this.ioBufferingBufferSize = readInt("profiler.io.buffering.buffersize", 20);
 
+        //OS
+        this.profileOsName = readString("profiler.os.name", null);
+
         // JVM
         this.profileJvmVendorName = readString("profiler.jvm.vendor.name", null);
         this.profileJvmStatCollectIntervalMs = readInt("profiler.jvm.stat.collect.interval", DEFAULT_AGENT_STAT_COLLECTION_INTERVAL_MS);
         this.profileJvmStatBatchSendCount = readInt("profiler.jvm.stat.batch.send.count", DEFAULT_NUM_AGENT_STAT_BATCH_SEND);
-        this.profilerJvmStatCollectDetailedMetrics = readBoolean("profiler.stat.jvm.collect.detailed.metrics", false);
+        this.profilerJvmStatCollectDetailedMetrics = readBoolean("profiler.jvm.stat.collect.detailed.metrics", false);
 
         this.agentInfoSendRetryInterval = readLong("profiler.agentInfo.send.retry.interval", DEFAULT_AGENT_INFO_SEND_RETRY_INTERVAL);
 
@@ -568,7 +643,11 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         // proxy http header names
         this.proxyHttpHeaderEnable = readBoolean("profiler.proxy.http.header.enable", true);
 
-        this.httpStatusCodeErrors = readList("profiler.http.status.code.errors");
+        this.httpStatusCodeErrors = new HttpStatusCodeErrors(readList("profiler.http.status.code.errors"));
+
+        this.injectionModuleFactoryClazzName = readString("profiler.guice.module.factory", null);
+
+        this.applicationNamespace = readString("profiler.application.namespace", "");
 
         logger.info("configuration loaded successfully.");
     }
@@ -703,6 +782,11 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         sb.append(", tcpDataSenderCommandActiveThreadCountEnable=").append(tcpDataSenderCommandActiveThreadCountEnable);
         sb.append(", tcpDataSenderCommandActiveThreadDumpEnable=").append(tcpDataSenderCommandActiveThreadDumpEnable);
         sb.append(", tcpDataSenderCommandActiveThreadLightDumpEnable=").append(tcpDataSenderCommandActiveThreadLightDumpEnable);
+        sb.append(", tcpDataSenderPinpointClientWriteTimeout=").append(tcpDataSenderPinpointClientWriteTimeout);
+        sb.append(", tcpDataSenderPinpointClientRequestTimeout=").append(tcpDataSenderPinpointClientRequestTimeout);
+        sb.append(", tcpDataSenderPinpointClientReconnectInterval=").append(tcpDataSenderPinpointClientReconnectInterval);
+        sb.append(", tcpDataSenderPinpointClientPingInterval=").append(tcpDataSenderPinpointClientPingInterval);
+        sb.append(", tcpDataSenderPinpointClientHandshakeInterval=").append(tcpDataSenderPinpointClientHandshakeInterval);
         sb.append(", traceAgentActiveThread=").append(traceAgentActiveThread);
         sb.append(", traceAgentDataSource=").append(traceAgentDataSource);
         sb.append(", dataSourceTraceLimitSize=").append(dataSourceTraceLimitSize);
@@ -716,6 +800,7 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         sb.append(", samplingRate=").append(samplingRate);
         sb.append(", ioBufferingEnable=").append(ioBufferingEnable);
         sb.append(", ioBufferingBufferSize=").append(ioBufferingBufferSize);
+        sb.append(", profileOsName='").append(profileOsName).append('\'');
         sb.append(", profileJvmVendorName='").append(profileJvmVendorName).append('\'');
         sb.append(", profileJvmStatCollectIntervalMs=").append(profileJvmStatCollectIntervalMs);
         sb.append(", profileJvmStatBatchSendCount=").append(profileJvmStatBatchSendCount);
@@ -730,7 +815,10 @@ public class DefaultProfilerConfig implements ProfilerConfig {
         sb.append(", supportLambdaExpressions=").append(supportLambdaExpressions);
         sb.append(", proxyHttpHeaderEnable=").append(proxyHttpHeaderEnable);
         sb.append(", httpStatusCodeErrors=").append(httpStatusCodeErrors);
+        sb.append(", injectionModuleFactoryClazzName='").append(injectionModuleFactoryClazzName).append('\'');
+        sb.append(", applicationNamespace='").append(applicationNamespace).append('\'');
         sb.append('}');
         return sb.toString();
     }
+
 }

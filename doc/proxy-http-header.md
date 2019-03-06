@@ -1,7 +1,16 @@
+---
+title: Monitoring Proxy Server
+keywords: proxy, http, header
+last_updated: Feb 1, 2018
+sidebar: mydoc_sidebar
+permalink: proxyhttpheader.html
+disqus: false
+---
+
 # Proxy monitoring using HTTP headers
 It is used to know the elapsed time between proxy and WAS.
 
-![overview](img/proxy-http-header-overview.png)
+![overview](images/proxy-http-header-overview.png)
 
 ## Pinpoint Configuration
 

@@ -21,216 +21,163 @@ import com.navercorp.pinpoint.rpc.packet.Packet;
 import com.navercorp.pinpoint.rpc.packet.PingPacket;
 import com.navercorp.pinpoint.rpc.packet.PingPayloadPacket;
 import com.navercorp.pinpoint.rpc.packet.PingSimplePacket;
-import com.navercorp.pinpoint.rpc.packet.PongPacket;
-import com.navercorp.pinpoint.rpc.server.PinpointServer;
-import com.navercorp.pinpoint.rpc.server.PinpointServerAcceptor;
-import com.navercorp.pinpoint.rpc.util.IOUtils;
-import com.navercorp.pinpoint.rpc.util.PinpointRPCTestUtils;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
+import com.navercorp.pinpoint.test.client.TestRawSocket;
+import com.navercorp.pinpoint.test.server.TestPinpointServerAcceptor;
+import com.navercorp.pinpoint.test.server.TestServerMessageListenerFactory;
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
-import org.springframework.util.SocketUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author Taejin Koo
  */
 public class HealthCheckTest {
 
-    private static int bindPort;
-
-    @BeforeClass
-    public static void setUp() throws IOException {
-        bindPort = SocketUtils.findAvailableTcpPort();
-    }
-
     @Test
     public void legacyHealthCheckTest1() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
-            sendPingAndReceivePongPacket(socket, PingPacket.PING_PACKET);
+            testRawSocket.connect(bindPort);
+            sendPingAndReceivePongPacket(testRawSocket, PingPacket.PING_PACKET);
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertFalse(pingHandled.get());
+        Assert.assertFalse(serverMessageListener.hasReceivedPing());
     }
 
     @Test
     public void legacyHealthCheckTest2() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
-            sendPingAndReceivePongPacket(socket, new PingPacket(1, (byte) 1, (byte) 10));
+            testRawSocket.connect(bindPort);
+            sendPingAndReceivePongPacket(testRawSocket, new PingPacket(1, (byte) 1, (byte) 10));
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertTrue(pingHandled.get());
+        Assert.assertTrue(serverMessageListener.hasReceivedPing());
     }
 
     @Test
     public void healthCheckTest() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
+            testRawSocket.connect(bindPort);
             // RUN_WITHOUT_HANDSHAKE
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 10));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 10));
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertTrue(pingHandled.get());
+        Assert.assertTrue(serverMessageListener.hasReceivedPing());
     }
 
     @Test
     public void healthCheckSimplePingTest() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
-            sendPingAndReceivePongPacket(socket, new PingSimplePacket());
+            testRawSocket.connect(bindPort);
+            sendPingAndReceivePongPacket(testRawSocket, new PingSimplePacket());
             Assert.fail();
         } catch (Exception e) {
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertFalse(pingHandled.get());
+        Assert.assertFalse(serverMessageListener.hasReceivedPing());
     }
 
     @Test
     public void stateSyncFailTest() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
         boolean isSuccess = false;
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
+            testRawSocket.connect(bindPort);
 
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
             isSuccess = true;
 
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
             Assert.fail();
         } catch (Exception e) {
             Assert.assertTrue(isSuccess);
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertFalse(pingHandled.get());
+        Assert.assertFalse(serverMessageListener.hasReceivedPing());
     }
 
     @Ignore
     @Test
     public void expiredHealthCheckTest() throws Exception {
-        final AtomicBoolean pingHandled = new AtomicBoolean(false);
+        TestServerMessageListenerFactory testServerMessageListenerFactory = new TestServerMessageListenerFactory(TestServerMessageListenerFactory.HandshakeType.DUPLEX, true);
+        TestServerMessageListenerFactory.TestServerMessageListener serverMessageListener = testServerMessageListenerFactory.create();
 
-        PinpointServerAcceptor serverAcceptor = PinpointRPCTestUtils.createPinpointServerFactory(bindPort, new PinpointRPCTestUtils.EchoServerListener() {
-            @Override
-            public void handlePing(PingPayloadPacket pingPacket, PinpointServer pinpointServer) {
-                pingHandled.compareAndSet(false, true);
-            }
-        });
+        TestPinpointServerAcceptor testPinpointServerAcceptor = new TestPinpointServerAcceptor(testServerMessageListenerFactory);
+        int bindPort = testPinpointServerAcceptor.bind();
 
-        Socket socket = null;
+        TestRawSocket testRawSocket = new TestRawSocket();
         try {
-            socket = new Socket("127.0.0.1", bindPort);
+            testRawSocket.connect(bindPort);
 
             Thread.sleep(35 * 60 * 1000);
 
-            sendPingAndReceivePongPacket(socket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
+            sendPingAndReceivePongPacket(testRawSocket, new PingPayloadPacket(1, (byte) 1, (byte) 1));
             Assert.fail();
         } catch (Exception e) {
         } finally {
-            IOUtils.close(socket);
-            PinpointRPCTestUtils.close(serverAcceptor);
+            testRawSocket.close();
+            testPinpointServerAcceptor.close();
         }
 
-        Assert.assertFalse(pingHandled.get());
+        Assert.assertFalse(serverMessageListener.hasReceivedPing());
     }
 
-    private void sendPingAndReceivePongPacket(Socket socket, Packet pingPacket) throws IOException, ProtocolException {
-        sendPingPacket(socket.getOutputStream(), pingPacket);
-        PongPacket pongPacket = readPongPacket(socket.getInputStream());
-        Assert.assertNotNull(pongPacket);
-    }
-
-    private void sendPingPacket(OutputStream outputStream, Packet pingPacket) throws ProtocolException, IOException {
-        ByteBuffer bb = pingPacket.toBuffer().toByteBuffer(0, pingPacket.toBuffer().writerIndex());
-        IOUtils.write(outputStream, bb.array());
-    }
-
-
-    private PongPacket readPongPacket(InputStream inputStream) throws ProtocolException, IOException {
-        byte[] payload = IOUtils.read(inputStream, 50, 3000);
-        ChannelBuffer cb = ChannelBuffers.wrappedBuffer(payload);
-
-        short packetType = cb.readShort();
-
-        PongPacket pongPacket = PongPacket.readBuffer(packetType, cb);
-        return pongPacket;
+    private void sendPingAndReceivePongPacket(TestRawSocket testRawSocket, Packet pingPacket) throws IOException, ProtocolException {
+        testRawSocket.sendPingPacket(pingPacket);
+        Assert.assertNotNull(testRawSocket.readPongPacket(3000));
     }
 
 }

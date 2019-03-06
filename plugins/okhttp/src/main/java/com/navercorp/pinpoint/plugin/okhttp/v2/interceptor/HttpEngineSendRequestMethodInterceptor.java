@@ -1,11 +1,11 @@
 /*
- * Copyright 2017 NAVER Corp.
+ * Copyright 2018 NAVER Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.navercorp.pinpoint.plugin.okhttp.v2.interceptor;
 
-import com.navercorp.pinpoint.bootstrap.config.DumpType;
 import com.navercorp.pinpoint.bootstrap.context.MethodDescriptor;
 import com.navercorp.pinpoint.bootstrap.context.SpanEventRecorder;
 import com.navercorp.pinpoint.bootstrap.context.Trace;
@@ -27,21 +27,18 @@ import com.navercorp.pinpoint.bootstrap.interceptor.scope.InterceptorScope;
 import com.navercorp.pinpoint.bootstrap.interceptor.scope.InterceptorScopeInvocation;
 import com.navercorp.pinpoint.bootstrap.logging.PLogger;
 import com.navercorp.pinpoint.bootstrap.logging.PLoggerFactory;
-import com.navercorp.pinpoint.bootstrap.util.InterceptorUtils;
-import com.navercorp.pinpoint.bootstrap.util.SimpleSampler;
-import com.navercorp.pinpoint.bootstrap.util.SimpleSamplerFactory;
-import com.navercorp.pinpoint.common.plugin.util.HostAndPort;
-import com.navercorp.pinpoint.common.trace.AnnotationKey;
-import com.navercorp.pinpoint.common.util.StringUtils;
-import com.navercorp.pinpoint.plugin.okhttp.v2.ConnectionGetter;
-import com.navercorp.pinpoint.plugin.okhttp.EndPointUtils;
+import com.navercorp.pinpoint.bootstrap.plugin.request.ClientRequestAdaptor;
+import com.navercorp.pinpoint.bootstrap.plugin.request.ClientRequestRecorder;
+import com.navercorp.pinpoint.bootstrap.plugin.request.util.CookieExtractor;
+import com.navercorp.pinpoint.bootstrap.plugin.request.util.CookieRecorder;
+import com.navercorp.pinpoint.bootstrap.plugin.request.util.CookieRecorderFactory;
 import com.navercorp.pinpoint.plugin.okhttp.OkHttpConstants;
 import com.navercorp.pinpoint.plugin.okhttp.OkHttpPluginConfig;
+import com.navercorp.pinpoint.plugin.okhttp.v2.OkHttpClientRequestAdaptor;
+import com.navercorp.pinpoint.plugin.okhttp.v2.OkHttpCookieExtractor;
 import com.navercorp.pinpoint.plugin.okhttp.v2.UserRequestGetter;
 import com.navercorp.pinpoint.plugin.okhttp.v2.UserResponseGetter;
 import com.squareup.okhttp.Request;
-
-import java.net.URL;
 
 /**
  * @author jaehong.kim
@@ -54,10 +51,8 @@ public class HttpEngineSendRequestMethodInterceptor implements AroundInterceptor
     private final MethodDescriptor methodDescriptor;
     private final InterceptorScope interceptorScope;
 
-    private final boolean param;
-    private final boolean cookie;
-    private final DumpType cookieDumpType;
-    private final SimpleSampler cookieSampler;
+    private final ClientRequestRecorder<Request> clientRequestRecorder;
+    private final CookieRecorder<Request> cookieRecorder;
 
     public HttpEngineSendRequestMethodInterceptor(TraceContext traceContext, MethodDescriptor methodDescriptor, InterceptorScope interceptorScope) {
         this.traceContext = traceContext;
@@ -65,14 +60,12 @@ public class HttpEngineSendRequestMethodInterceptor implements AroundInterceptor
         this.interceptorScope = interceptorScope;
 
         final OkHttpPluginConfig config = new OkHttpPluginConfig(traceContext.getProfilerConfig());
-        this.param = config.isParam();
-        this.cookie = config.isCookie();
-        this.cookieDumpType = config.getCookieDumpType();
-        if (cookie) {
-            cookieSampler = SimpleSamplerFactory.createSampler(cookie, config.getCookieSamplingRate());
-        } else {
-            this.cookieSampler = null;
-        }
+
+        ClientRequestAdaptor<Request> clientRequestAdaptor = new OkHttpClientRequestAdaptor();
+        this.clientRequestRecorder = new ClientRequestRecorder<Request>(config.isParam(), clientRequestAdaptor);
+
+        CookieExtractor<Request> cookieExtractor = new OkHttpCookieExtractor();
+        this.cookieRecorder = CookieRecorderFactory.newCookieRecorder(config.getHttpDumpConfig(), cookieExtractor);
     }
 
     @Override
@@ -125,13 +118,6 @@ public class HttpEngineSendRequestMethodInterceptor implements AroundInterceptor
             return false;
         }
 
-        if (!(target instanceof ConnectionGetter)) {
-            if (isDebug) {
-                logger.debug("Invalid target object. Need field accessor({}).", OkHttpConstants.FIELD_CONNECTION);
-            }
-            return false;
-        }
-
         return true;
     }
 
@@ -165,16 +151,9 @@ public class HttpEngineSendRequestMethodInterceptor implements AroundInterceptor
             // typeCheck validate();
             final Request request = ((UserRequestGetter) target)._$PINPOINT$_getUserRequest();
             if (request != null) {
-                try {
-                    recorder.recordAttribute(AnnotationKey.HTTP_URL, InterceptorUtils.getHttpUrl(request.urlString(), param));
-                    final String endpoint = getDestinationId(request.url());
-                    recorder.recordDestinationId(endpoint);
-                } catch (Exception ignored) {
-                    logger.warn("Failed to invoke of request.url(). {}", ignored.getMessage());
-                }
-                recordRequest(trace, request, throwable);
+                this.clientRequestRecorder.record(recorder, request, throwable);
+                this.cookieRecorder.record(recorder, request, throwable);
             }
-
         } finally {
             trace.traceBlockEnd();
         }
@@ -185,36 +164,5 @@ public class HttpEngineSendRequestMethodInterceptor implements AroundInterceptor
             return null;
         }
         return invocation.getAttachment();
-    }
-
-    private String getDestinationId(URL httpUrl) {
-        if (httpUrl == null || httpUrl.getHost() == null) {
-            return "UnknownHttpClient";
-        }
-        final int port = EndPointUtils.getPort(httpUrl.getPort(), httpUrl.getDefaultPort());
-        return HostAndPort.toHostAndPortString(httpUrl.getHost(), port);
-    }
-
-
-    private void recordRequest(Trace trace, Request request, Throwable throwable) {
-        final boolean isException = InterceptorUtils.isThrowable(throwable);
-        if (cookie) {
-            if (DumpType.ALWAYS == cookieDumpType) {
-                recordCookie(request, trace);
-            } else if (DumpType.EXCEPTION == cookieDumpType && isException) {
-                recordCookie(request, trace);
-            }
-        }
-    }
-
-    private void recordCookie(Request request, Trace trace) {
-        for (String cookie : request.headers("Cookie")) {
-            if (cookieSampler.isSampling()) {
-                final SpanEventRecorder recorder = trace.currentSpanEventRecorder();
-                recorder.recordAttribute(AnnotationKey.HTTP_COOKIE, StringUtils.abbreviate(cookie, 1024));
-            }
-
-            return;
-        }
     }
 }

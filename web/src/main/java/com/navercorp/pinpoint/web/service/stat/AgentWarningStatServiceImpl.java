@@ -17,7 +17,7 @@
 package com.navercorp.pinpoint.web.service.stat;
 
 import com.navercorp.pinpoint.common.server.bo.stat.AgentWarningStatDataPoint;
-import com.navercorp.pinpoint.common.server.bo.stat.DeadlockBo;
+import com.navercorp.pinpoint.common.server.bo.stat.DeadlockThreadCountBo;
 import com.navercorp.pinpoint.common.util.CollectionUtils;
 import com.navercorp.pinpoint.rpc.util.ListUtils;
 import com.navercorp.pinpoint.web.dao.stat.DeadlockDao;
@@ -74,9 +74,9 @@ public class AgentWarningStatServiceImpl implements AgentWarningStatService {
     private List<AgentWarningStatDataPoint> select0(String agentId, Range range) {
         List<AgentWarningStatDataPoint> agentWarningStatDataPointList = new ArrayList<>();
 
-        List<DeadlockBo> deadlockBoList = deadlockDao.getAgentStatList(agentId, range);
-        for (DeadlockBo deadlockBo : deadlockBoList) {
-            agentWarningStatDataPointList.add(deadlockBo);
+        List<DeadlockThreadCountBo> deadlockThreadCountBoList = deadlockDao.getAgentStatList(agentId, range);
+        for (DeadlockThreadCountBo deadlockThreadCountBo : deadlockThreadCountBoList) {
+            agentWarningStatDataPointList.add(deadlockThreadCountBo);
         }
 
         return agentWarningStatDataPointList;
@@ -88,11 +88,7 @@ public class AgentWarningStatServiceImpl implements AgentWarningStatService {
         if (CollectionUtils.hasLength(agentWarningStatDataPointList)) {
             for (AgentWarningStatDataPoint agentWarningStatDataPoint : agentWarningStatDataPointList) {
                 long startTimestamp = agentWarningStatDataPoint.getStartTimestamp();
-                List<AgentWarningStatDataPoint> partition = partitions.get(startTimestamp);
-                if (partition == null) {
-                    partition = new ArrayList<>();
-                    partitions.put(startTimestamp, partition);
-                }
+                List<AgentWarningStatDataPoint> partition = partitions.computeIfAbsent(startTimestamp, k -> new ArrayList<>());
                 partition.add(agentWarningStatDataPoint);
             }
         }
@@ -100,7 +96,7 @@ public class AgentWarningStatServiceImpl implements AgentWarningStatService {
     }
 
     private List<AgentStatusTimelineSegment> createTimelineSegment(List<AgentWarningStatDataPoint> agentWarningStatDataPointList) {
-        Collections.sort(agentWarningStatDataPointList, new Comparator<AgentWarningStatDataPoint>() {
+        agentWarningStatDataPointList.sort(new Comparator<AgentWarningStatDataPoint>() {
             @Override
             public int compare(AgentWarningStatDataPoint o1, AgentWarningStatDataPoint o2) {
                 int eventTimestampComparison = Long.compare(o1.getTimestamp(), o2.getTimestamp());

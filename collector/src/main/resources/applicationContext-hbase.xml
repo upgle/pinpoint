@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xmlns:beans="http://www.springframework.org/schema/beans"
        xsi:schemaLocation="
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
 
@@ -30,7 +29,7 @@
                 <prop key="hbase.client.async.enable">${hbase.client.async.enable:false}</prop>
                 <prop key="hbase.client.async.in.queuesize">${hbase.client.async.in.queuesize:10000}</prop>
                 <prop key="hbase.tablemultiplexer.flush.period.ms">${hbase.client.async.flush.period.ms:100}</prop>
-                <prop key="hbase.client.max.retries.in.queue">${hbase.client.async.max.retries.in.queue:10}</prop>
+                <prop key="hbase.client.max.retries.in.queue">${hbase.client.async.max.retries.in.queue:10000}</prop>
             </props>
         </property>
     </bean>
@@ -46,15 +45,19 @@
         <property name="preStartAllCoreThreads" value="true"/>
     </bean>
 
-    <bean id="connectionFactory" class="com.navercorp.pinpoint.common.hbase.PooledHTableFactory">
-        <constructor-arg ref="hbaseConfiguration"/>
-        <constructor-arg ref="hbaseThreadPool"/>
+    <bean id="connectionFactory" class="com.navercorp.pinpoint.common.hbase.ConnectionFactoryBean">
+        <constructor-arg type="org.apache.hadoop.conf.Configuration" ref="hbaseConfiguration"/>
+        <constructor-arg type="java.util.concurrent.ExecutorService" ref="hbaseThreadPool"/>
+    </bean>
+
+    <bean id="hbaseTableFactory" class="com.navercorp.pinpoint.common.hbase.HbaseTableFactory">
+        <constructor-arg ref="connectionFactory"/>
     </bean>
 
     <bean class="org.apache.hadoop.util.ShutdownHookManagerProxy"/>
 
     <bean id="asyncOperation" class="com.navercorp.pinpoint.common.hbase.HBaseAsyncOperationFactory" factory-method="create">
-        <constructor-arg type="org.apache.hadoop.hbase.client.Connection" value="#{connectionFactory.getConnection()}"/>
+        <constructor-arg type="org.apache.hadoop.hbase.client.Connection" ref="connectionFactory"/>
         <constructor-arg type="org.apache.hadoop.conf.Configuration" ref="hbaseConfiguration"/>
     </bean>
 
@@ -64,12 +67,16 @@
 
     <bean id="hbaseTemplate" class="com.navercorp.pinpoint.common.hbase.HbaseTemplate2" destroy-method="destroy">
         <property name="configuration" ref="hbaseConfiguration"/>
-        <property name="tableFactory" ref="connectionFactory"/>
+        <property name="tableFactory" ref="hbaseTableFactory"/>
         <property name="asyncOperation" ref="asyncOperation"/>
     </bean>
 
-    <bean id="hBaseAdminTemplate" class="com.navercorp.pinpoint.common.hbase.HBaseAdminTemplate" destroy-method="close">
-        <constructor-arg ref="hbaseConfiguration" index="0"></constructor-arg>
+    <bean id="hbaseAdminFactory" class="com.navercorp.pinpoint.common.hbase.HbaseAdminFactory">
+        <constructor-arg ref="connectionFactory"/>
+    </bean>
+
+    <bean id="hbaseAdminTemplate" class="com.navercorp.pinpoint.common.hbase.HBaseAdminTemplate">
+        <constructor-arg ref="hbaseAdminFactory"/>
     </bean>
 
     <bean id="applicationTraceIndexDistributor" class="com.sematext.hbase.wd.RowKeyDistributorByHashPrefix">
@@ -77,9 +84,7 @@
     </bean>
 
     <bean id="applicationTraceIndex" class="com.sematext.hbase.wd.RowKeyDistributorByHashPrefix$OneByteSimpleHash">
-        <constructor-arg>
-            <value type="int">32</value>
-        </constructor-arg>
+        <constructor-arg type="int" value="32"/>
     </bean>
 
     <bean id="traceV2Distributor" class="com.sematext.hbase.wd.RowKeyDistributorByHashPrefix">
